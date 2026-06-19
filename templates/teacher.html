@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teacher Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Teacher Panel</h1>
+    <p><a href="/student">Go to Student Panel</a></p>
+    <p><a href="/responses">View Student Responses</a></p>
+
+    <form method="POST">
+        <p>Question:</p>
+        <textarea name="question" required></textarea>
+
+        <p>Model Answer:</p>
+        <textarea name="model_answer" required></textarea>
+
+        <p>Keywords (comma separated):</p>
+        <input type="text" name="keywords" required>
+
+        <p>Maximum Marks:</p>
+        <input type="number" name="max_marks" required>
+
+        <br><br>
+        <button type="submit">Add Question</button>
+    </form>
+
+    <hr>
+
+    <h2>Saved Questions</h2>
+
+    <ul>
+        {% for q in questions %}
+            <li>
+                <strong>{{ q[1] }}</strong>
+                ({{ q[4] }} marks)
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

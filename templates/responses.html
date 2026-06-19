@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Responses</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <h1>Student Responses</h1>
+
+    <a href="/teacher">Back to Teacher Panel</a>
+
+    <table border="1" cellpadding="10">
+        <tr>
+            <th>Question</th>
+            <th>Student Answer</th>
+            <th>Marks</th>
+            <th>Feedback</th>
+        </tr>
+
+        {% for r in responses %}
+        <tr>
+            <td>{{ r[1] }}</td>
+            <td>{{ r[2] }}</td>
+            <td>{{ r[3] }}</td>
+            <td>{{ r[4] }}</td>
+        </tr>
+        {% endfor %}
+
+    </table>
+
+</body>
+</html>

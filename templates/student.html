@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Student Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Student Panel</h1>
+    <p><a href="/teacher">Go to Teacher Panel</a></p>
+
+    <form method="POST">
+
+        <p>Select Question:</p>
+
+        <select name="question_id" required>
+            {% for q in questions %}
+                <option value="{{ q[0] }}">{{ q[1] }}</option>
+            {% endfor %}
+        </select>
+
+        <p>Your Answer:</p>
+
+        <textarea
+            name="student_answer"
+            rows="6"
+            cols="60"
+            required></textarea>
+
+        <br><br>
+
+        <button type="submit">Submit Answer</button>
+
+    </form>
+</body>
+</html> 
