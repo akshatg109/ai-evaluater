@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, session
 import sqlite3
 
 app = Flask(__name__)
+app.secret_key = "your_secret_key_here"
 
 def init_db():
     conn = sqlite3.connect("database.db")
@@ -109,8 +110,32 @@ def student():
 
     return render_template("student.html", questions=questions)
 
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+
+        if username == "teacher" and password == "password123":
+            session["teacher_logged_in"] = True
+            return redirect("/teacher")
+
+        return render_template(
+            "login.html",
+            error="Invalid username or password"
+        )
+
+    return render_template("login.html")
+
+
 @app.route("/teacher", methods=["GET", "POST"])
 def teacher():
+
+
+    if not session.get("teacher_logged_in"):
+        return redirect("/login")
 
 
     if request.method == "POST":
@@ -143,7 +168,14 @@ def teacher():
 
 @app.route("/")
 def home():
-    return redirect("/teacher")
+    return render_template("index.html")
+
+@app.route("/logout")
+def logout():
+    session.pop("teacher_logged_in", None)
+    return redirect("/")
+
+
 
 
 if __name__ == "__main__":
