@@ -1,21 +1,66 @@
+```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Evaluation Result</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
 <body>
-    <h1>Evaluation Result</h1>
 
-    <p><strong>Suggested Marks:</strong> {{ score }}</p>
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom">
+        <div class="container">
 
-    <p><strong>Feedback:</strong> {{ feedback }}</p>
+            <a class="brand" href="/teacher">
+                AI<span>Evaluator</span>
+            </a>
 
-    <br>
+            <div class="navbar-nav ms-auto gap-2">
+                <a class="nav-link" href="/teacher">Teacher</a>
+                <a class="nav-link" href="/student">Student</a>
+                <a class="nav-link" href="/responses">Responses</a>
+            </div>
 
-    <a href="/student">Evaluate Another Answer</a>
+        </div>
+    </nav>
 
+    <div class="page-container">
+
+        <div class="dashboard-card">
+
+            <h1 class="page-title">Evaluation Result</h1>
+
+            <div class="text-center">
+
+                <div class="result-score">
+                    {{ score }}
+                </div>
+
+                <p class="page-subtitle">
+                    Suggested Marks
+                </p>
+
+            </div>
+
+            <div class="feedback-box">
+                {{ feedback }}
+            </div>
+
+            <div class="text-center mt-4">
+                <a href="/student" class="btn btn-outline-light">
+                    Evaluate Another Answer
+                </a>
+            </div>
+
+        </div>
+
+    </div>
 
 </body>
 </html>
+```
