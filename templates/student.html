@@ -1,4 +1,4 @@
-```html
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -39,7 +39,7 @@
                 Submit your answer and receive instant feedback.
             </p>
 
-            <form method="POST">
+            <form method="POST" enctype="multipart/form-data">
 
                 <label for="question_id" class="form-label">
                     Select Question
@@ -59,9 +59,18 @@
 
                 </select>
 
-                <label for="student_answer" class="form-label mt-4">
-                    Your Answer
-                </label>
+               <label for="answer_image" class="form-label mt-4">
+    Upload Answer Sheet
+</label>
+
+<input
+    type="file"
+    id="answer_image"
+    name="answer_image"
+    class="form-control"
+    accept="image/*">
+
+<p class="text-center my-3 text-secondary">OR</p>
 
                 <textarea
                     id="student_answer"
@@ -69,7 +78,7 @@
                     class="form-control"
                     rows="8"
                     placeholder="Type your answer here..."
-                    required></textarea>
+                ></textarea>
 
                 <button type="submit" class="btn-primary-custom mt-4">
                     Submit Answer

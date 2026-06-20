@@ -1,8 +1,14 @@
 from flask import Flask, render_template, request, redirect, session
+from PIL import Image
+import pytesseract
+import os
 import sqlite3
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key_here"
+
+UPLOAD_FOLDER = "uploads"
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 def init_db():
     conn = sqlite3.connect("database.db")
@@ -35,28 +41,6 @@ init_db()
 
 
 
-@app.route("/responses")
-def responses():
-
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT responses.id,
-               questions.question,
-               responses.student_answer,
-               responses.suggested_marks,
-               responses.feedback
-        FROM responses
-        JOIN questions
-        ON responses.question_id = questions.id
-    """)
-
-    data = cursor.fetchall()
-
-    conn.close()
-
-    return render_template("responses.html", responses=data)
 
 @app.route("/student", methods=["GET", "POST"])
 def student():
@@ -65,8 +49,31 @@ def student():
     cursor = conn.cursor()
 
     if request.method == "POST":
+
         question_id = request.form["question_id"]
-        student_answer = request.form["student_answer"].lower()
+
+        student_answer = request.form.get("student_answer", "").strip()
+
+        image = request.files.get("answer_image")
+
+        if image and image.filename:
+
+            image_path = os.path.join(
+                app.config["UPLOAD_FOLDER"],
+                image.filename
+            )
+
+            image.save(image_path)
+
+            extracted_text = pytesseract.image_to_string(
+                Image.open(image_path)
+            )
+
+            student_answer = extracted_text.strip()
+            
+            print("OCR TEXT:", student_answer)
+
+        student_answer = student_answer.lower()
 
         cursor.execute(
             "SELECT keywords, max_marks FROM questions WHERE id = ?",
@@ -77,7 +84,10 @@ def student():
 
         keyword_list = [k.strip().lower() for k in keywords.split(",")]
 
-        matched = sum(1 for word in keyword_list if word in student_answer)
+        matched = sum(
+            1 for word in keyword_list
+            if word in student_answer
+        )
 
         score = round((matched / len(keyword_list)) * max_marks)
 
@@ -109,6 +119,8 @@ def student():
     conn.close()
 
     return render_template("student.html", questions=questions)
+
+
 
 
 @app.route("/login", methods=["GET", "POST"])
