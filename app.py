@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 import fitz
 from pdf2image import convert_from_path
-import pytesseract
 import json
 import os
 
@@ -27,34 +26,39 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 def extract_text(file_path):
-
+    # If PDF, try to extract embedded text first. If none, convert pages
+    # to images and save them for external OCR (e.g., via OpenRouter).
     if file_path.lower().endswith(".pdf"):
-
         text = ""
 
         doc = fitz.open(file_path)
 
         for page in doc:
             page_text = page.get_text()
-
             if page_text.strip():
                 text += page_text + "\n"
 
         doc.close()
 
         if text.strip():
-            return text
+            return text.strip()
 
+        # No embedded text found — convert PDF pages to images for OCR later
         pages = convert_from_path(file_path)
+        image_paths = []
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        out_dir = os.path.join(app.config["UPLOAD_FOLDER"], f"{base_name}_pages")
+        os.makedirs(out_dir, exist_ok=True)
 
-        for page in pages:
-            text += pytesseract.image_to_string(page) + "\n"
+        for i, page in enumerate(pages, start=1):
+            img_path = os.path.join(out_dir, f"page_{i}.png")
+            page.save(img_path, "PNG")
+            image_paths.append(img_path)
 
-        return text.strip()
+        return image_paths
 
-    return pytesseract.image_to_string(
-        Image.open(file_path)
-    ).strip()
+    # For non-PDF files, assume the file itself is an image and return its path
+    return file_path
 
 
 def extract_max_marks(question_text):
@@ -76,7 +80,7 @@ Examples:
 """
 
     response = client.chat.completions.create(
-        model="qwen/qwen3-next-80b-a3b-instruct:free",
+        model="qwen/qwen3-vl-32b-instruct",
         messages=[
             {
                 "role": "user",
