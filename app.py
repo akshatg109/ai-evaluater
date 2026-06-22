@@ -1,193 +1,215 @@
-from flask import Flask, render_template, request, redirect, session
+from flask import Flask, render_template, request
 from PIL import Image
+from openai import OpenAI
+from dotenv import load_dotenv
+
 import pytesseract
-import os
 import sqlite3
+import json
+import os
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key_here"
+
+load_dotenv()
+
+client = OpenAI(
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+    base_url="https://openrouter.ai/api/v1"
+)
 
 UPLOAD_FOLDER = "uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 
 def init_db():
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS questions (
+        CREATE TABLE IF NOT EXISTS evaluations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            question TEXT NOT NULL,
-            model_answer TEXT NOT NULL,
-            keywords TEXT NOT NULL,
-            max_marks INTEGER NOT NULL
+            question_text TEXT NOT NULL,
+            student_answer TEXT NOT NULL,
+            score INTEGER NOT NULL,
+            feedback TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS responses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        question_id INTEGER NOT NULL,
-        student_answer TEXT NOT NULL,
-        suggested_marks INTEGER NOT NULL,
-        feedback TEXT NOT NULL
-    )
-""")
-
     conn.commit()
     conn.close()
+
 
 init_db()
 
 
 
 
-@app.route("/student", methods=["GET", "POST"])
-def student():
+def extract_max_marks(question_text):
 
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
+    prompt = f"""
+You are an expert at reading examination papers.
 
-    if request.method == "POST":
+Extract the TOTAL maximum marks from the following question paper text.
 
-        question_id = request.form["question_id"]
+Question Paper:
+{question_text}
 
-        student_answer = request.form.get("student_answer", "").strip()
+Return ONLY the number.
 
-        image = request.files.get("answer_image")
+Examples:
+100
+50
+25
+"""
 
-        if image and image.filename:
+    response = client.chat.completions.create(
+        model="qwen/qwen3-next-80b-a3b-instruct:free",
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    )
 
-            image_path = os.path.join(
-                app.config["UPLOAD_FOLDER"],
-                image.filename
-            )
+    return int(response.choices[0].message.content.strip())
 
-            image.save(image_path)
 
-            extracted_text = pytesseract.image_to_string(
-                Image.open(image_path)
-            )
+def evaluate_answer(question, student_answer, max_marks):
 
-            student_answer = extracted_text.strip()
-            
-            print("OCR TEXT:", student_answer)
+    prompt = f"""
+You are an experienced examiner.
 
-        student_answer = student_answer.lower()
+Question:
+{question}
 
-        cursor.execute(
-            "SELECT keywords, max_marks FROM questions WHERE id = ?",
-            (question_id,)
+Student Answer:
+{student_answer}
+
+Maximum Marks:
+{max_marks}
+
+First determine the expected key points for an ideal answer.
+
+Then evaluate the student's answer based on:
+
+- Accuracy
+- Completeness
+- Relevance
+- Clarity
+
+Return ONLY valid JSON in this format:
+
+{{
+    "score": integer between 0 and {max_marks},
+    "feedback": "brief feedback"
+}}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="qwen/qwen3-next-80b-a3b-instruct:free",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
         )
 
-        keywords, max_marks = cursor.fetchone()
+        content = response.choices[0].message.content.strip()
 
-        keyword_list = [k.strip().lower() for k in keywords.split(",")]
+        print("QWEN RESPONSE:", content)
 
-        matched = sum(
-            1 for word in keyword_list
-            if word in student_answer
-        )
+        return json.loads(content)
 
-        score = round((matched / len(keyword_list)) * max_marks)
+    except Exception as e:
+        print("Qwen Error:", e)
 
-        if score >= max_marks * 0.8:
-            feedback = "Excellent answer"
-        elif score >= max_marks * 0.5:
-            feedback = "Good answer, but some points are missing"
-        else:
-            feedback = "Review the topic and include more key points"
+        return {
+            "score": 0,
+            "feedback": "AI evaluation is temporarily unavailable. Please try again later."
+        }
 
-        cursor.execute("""
-            INSERT INTO responses
-            (question_id, student_answer, suggested_marks, feedback)
-            VALUES (?, ?, ?, ?)
-        """, (question_id, student_answer, score, feedback))
-
-        conn.commit()
-        conn.close()
-
-        return render_template(
-            "result.html",
-            score=score,
-            feedback=feedback
-        )
-
-    cursor.execute("SELECT id, question FROM questions")
-    questions = cursor.fetchall()
-
-    conn.close()
-
-    return render_template("student.html", questions=questions)
-
-
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-
-        if username == "teacher" and password == "password123":
-            session["teacher_logged_in"] = True
-            return redirect("/teacher")
-
-        return render_template(
-            "login.html",
-            error="Invalid username or password"
-        )
-
-    return render_template("login.html")
-
-
-@app.route("/teacher", methods=["GET", "POST"])
-def teacher():
-
-
-    if not session.get("teacher_logged_in"):
-        return redirect("/login")
-
-
-    if request.method == "POST":
-        question = request.form["question"]
-        model_answer = request.form["model_answer"]
-        keywords = request.form["keywords"]
-        max_marks = request.form["max_marks"]
-
-        conn = sqlite3.connect("database.db")
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO questions (question, model_answer, keywords, max_marks)
-            VALUES (?, ?, ?, ?)
-        """, (question, model_answer, keywords, max_marks))
-
-        conn.commit()
-        conn.close()
-
-        return redirect("/teacher")
-    
-
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM questions")
-    questions = cursor.fetchall()
-    conn.close()
-
-    return render_template("teacher.html", questions=questions)
 
 @app.route("/")
 def home():
-    return render_template("index.html")
-
-@app.route("/logout")
-def logout():
-    session.pop("teacher_logged_in", None)
-    return redirect("/")
+    return render_template("home.html")
 
 
+@app.route("/dashboard")
+def dashboard():
+    return render_template("dashboard.html")
+
+
+@app.route("/evaluate", methods=["POST"])
+def evaluate():
+
+    question_file = request.files["question_file"]
+    answer_file = request.files["answer_file"]
+
+    max_marks = int(request.form["max_marks"])
+
+    question_path = os.path.join(
+        app.config["UPLOAD_FOLDER"],
+        question_file.filename
+    )
+
+    answer_path = os.path.join(
+        app.config["UPLOAD_FOLDER"],
+        answer_file.filename
+    )
+
+    question_file.save(question_path)
+    answer_file.save(answer_path)
+
+    question_text = pytesseract.image_to_string(
+        Image.open(question_path)
+    )
+
+    max_marks = extract_max_marks(question_text)
+
+    student_answer = pytesseract.image_to_string(
+        Image.open(answer_path)
+    ).strip()
+
+    print("QUESTION OCR:", question_text)
+    print("ANSWER OCR:", student_answer)
+
+    result = evaluate_answer(
+        question_text,
+        student_answer,
+        max_marks
+    )
+
+    score = int(result["score"])
+    feedback = result["feedback"]
+
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO evaluations
+        (question_text, student_answer, score, feedback)
+        VALUES (?, ?, ?, ?)
+    """, (
+        question_text,
+        student_answer,
+        score,
+        feedback
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return render_template(
+        "result.html",
+        score=score,
+        feedback=feedback
+    )
 
 
 if __name__ == "__main__":
