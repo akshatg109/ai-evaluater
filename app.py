@@ -3,6 +3,9 @@ from PIL import Image
 from openai import OpenAI
 from dotenv import load_dotenv
 
+from werkzeug.utils import secure_filename
+import fitz
+from pdf2image import convert_from_path
 import pytesseract
 import json
 import os
@@ -20,6 +23,38 @@ UPLOAD_FOLDER = "uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+
+def extract_text(file_path):
+
+    if file_path.lower().endswith(".pdf"):
+
+        text = ""
+
+        doc = fitz.open(file_path)
+
+        for page in doc:
+            page_text = page.get_text()
+
+            if page_text.strip():
+                text += page_text + "\n"
+
+        doc.close()
+
+        if text.strip():
+            return text
+
+        pages = convert_from_path(file_path)
+
+        for page in pages:
+            text += pytesseract.image_to_string(page) + "\n"
+
+        return text.strip()
+
+    return pytesseract.image_to_string(
+        Image.open(file_path)
+    ).strip()
 
 
 def extract_max_marks(question_text):
@@ -128,26 +163,22 @@ def evaluate():
 
     question_path = os.path.join(
         app.config["UPLOAD_FOLDER"],
-        question_file.filename
+        secure_filename(question_file.filename)
     )
 
     answer_path = os.path.join(
         app.config["UPLOAD_FOLDER"],
-        answer_file.filename
+        secure_filename(answer_file.filename)
     )
 
     question_file.save(question_path)
     answer_file.save(answer_path)
 
-    question_text = pytesseract.image_to_string(
-        Image.open(question_path)
-    )
+    question_text = extract_text(question_path)
 
     max_marks = extract_max_marks(question_text)
 
-    student_answer = pytesseract.image_to_string(
-        Image.open(answer_path)
-    ).strip()
+    student_answer = extract_text(answer_path)
 
     print("QUESTION OCR:", question_text)
     print("ANSWER OCR:", student_answer)
