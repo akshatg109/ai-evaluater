@@ -4,7 +4,6 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 import pytesseract
-import sqlite3
 import json
 import os
 
@@ -21,30 +20,6 @@ UPLOAD_FOLDER = "uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-
-def init_db():
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS evaluations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            question_text TEXT NOT NULL,
-            student_answer TEXT NOT NULL,
-            score INTEGER NOT NULL,
-            feedback TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-
-
-init_db()
-
-
 
 
 def extract_max_marks(question_text):
@@ -151,8 +126,6 @@ def evaluate():
     question_file = request.files["question_file"]
     answer_file = request.files["answer_file"]
 
-    max_marks = int(request.form["max_marks"])
-
     question_path = os.path.join(
         app.config["UPLOAD_FOLDER"],
         question_file.filename
@@ -187,23 +160,6 @@ def evaluate():
 
     score = int(result["score"])
     feedback = result["feedback"]
-
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        INSERT INTO evaluations
-        (question_text, student_answer, score, feedback)
-        VALUES (?, ?, ?, ?)
-    """, (
-        question_text,
-        student_answer,
-        score,
-        feedback
-    ))
-
-    conn.commit()
-    conn.close()
 
     return render_template(
         "result.html",
