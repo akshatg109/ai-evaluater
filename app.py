@@ -16,6 +16,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from io import BytesIO
 import json
 import os
+from datetime import datetime
 
 from supabase import create_client
 import os
@@ -63,6 +64,18 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+
+def format_datetime(dt_string):
+    """Format ISO datetime string to readable format"""
+    if not dt_string:
+        return "Unknown"
+    try:
+        # Parse ISO format datetime
+        dt = datetime.fromisoformat(dt_string.replace('Z', '+00:00'))
+        # Format as: "Jun 23, 2026 at 2:30 PM"
+        return dt.strftime("%b %d, %Y at %I:%M %p")
+    except:
+        return dt_string
 
 
 def extract_text(file_path):
@@ -400,11 +413,15 @@ def history():
         .eq("user_email", email)
         .order("created_at", desc=True)
         .execute()
-    )
+    ).data
+
+    # Format dates for display
+    for eval in evaluations:
+        eval['formatted_date'] = format_datetime(eval.get('created_at'))
 
     return render_template(
         "history.html",
-        evaluations=evaluations.data,
+        evaluations=evaluations,
         user=email
     )
     
@@ -463,6 +480,159 @@ def logout():
     return redirect("/")
 
 
+@app.route("/download-history/<int:eval_id>")
+def download_history(eval_id):
+    """Download individual evaluation from history"""
+    if "user" not in session:
+        return "Unauthorized", 401
+    
+    try:
+        # Fetch the evaluation from database
+        result = supabase.table("evaluations").select("*").eq("id", eval_id).eq("user_email", session["user"]).execute()
+        
+        if not result.data:
+            return "Evaluation not found", 404
+        
+        eval_data = result.data[0]
+        
+        # Create data structure for PDF generation
+        data = {
+            'score': eval_data.get('score', 0),
+            'feedback': eval_data.get('feedback', ''),
+            'max_marks': 100,  # Default, you may want to store this in DB
+            'question': eval_data.get('question_text', ''),
+            'answer': eval_data.get('student_answer', ''),
+            'answer_key': eval_data.get('answer_key', ''),
+            'created_at': format_datetime(eval_data.get('created_at', ''))
+        }
+    except Exception as e:
+        print(f"Error fetching evaluation: {e}")
+        return "Error retrieving evaluation", 500
+    
+    # Generate PDF (reuse existing logic)
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=0.75*inch,
+        leftMargin=0.75*inch,
+        topMargin=0.75*inch,
+        bottomMargin=0.75*inch
+    )
+    
+    story = []
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#8b5cf6'),
+        spaceAfter=12,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.HexColor('#3b82f6'),
+        spaceAfter=10,
+        spaceBefore=12,
+        fontName='Helvetica-Bold'
+    )
+    
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=10,
+        alignment=TA_JUSTIFY
+    )
+    
+    meta_style = ParagraphStyle(
+        'MetaStyle',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#666666'),
+        spaceAfter=4
+    )
+    
+    # Title
+    story.append(Paragraph("📋 AI Answer Sheet Evaluation Report", title_style))
+    story.append(Spacer(1, 6))
+    
+    # Divider line
+    from reportlab.platypus import HRFlowable
+    story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#8b5cf6')))
+    story.append(Spacer(1, 12))
+    
+    # Metadata section
+    story.append(Paragraph(f"<b>Evaluation Date:</b> {data['created_at']}", meta_style))
+    story.append(Spacer(1, 12))
+    
+    # Score - Enhanced presentation
+    score_table_data = [
+        ['Suggested Marks', f"{data['score']}"]
+    ]
+    score_table = Table(score_table_data, colWidths=[2*inch, 2*inch])
+    score_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (1, 0), colors.HexColor('#8b5cf6')),
+        ('TEXTCOLOR', (0, 0), (1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (1, 0), 'CENTER'),
+        ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (1, 0), 12),
+        ('TOPPADDING', (0, 0), (1, 0), 12),
+        ('GRID', (0, 0), (1, 0), 1, colors.HexColor('#e0e0e0')),
+        ('FONTNAME', (0, 1), (1, 1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 1), (1, 1), 16),
+        ('ALIGN', (0, 1), (1, 1), 'CENTER'),
+        ('TOPPADDING', (0, 1), (1, 1), 10),
+        ('BOTTOMPADDING', (0, 1), (1, 1), 10),
+    ]))
+    story.append(score_table)
+    story.append(Spacer(1, 20))
+    
+    # Feedback Section
+    story.append(Paragraph("💬 Examiner Feedback", heading_style))
+    story.append(Paragraph(data['feedback'], normal_style))
+    story.append(Spacer(1, 18))
+    
+    # Page Break
+    story.append(PageBreak())
+    
+    # Question Section
+    story.append(Paragraph("📖 Question Paper", heading_style))
+    story.append(Paragraph(data['question'], normal_style))
+    story.append(Spacer(1, 20))
+    
+    # Answer Section
+    story.append(PageBreak())
+    story.append(Paragraph("✍️ Student Answer", heading_style))
+    story.append(Paragraph(data['answer'], normal_style))
+    
+    # Answer Key (if available)
+    if data.get('answer_key'):
+        story.append(Spacer(1, 20))
+        story.append(PageBreak())
+        story.append(Paragraph("✅ Answer Key", heading_style))
+        story.append(Paragraph(data['answer_key'], normal_style))
+    
+    # Build PDF
+    doc.build(story)
+    buffer.seek(0)
+    
+    return send_file(
+        buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'evaluation-{eval_id}.pdf'
+    )
+
+
 @app.route("/download-result")
 def download_result():
     if 'evaluation_data' not in session:
@@ -513,55 +683,70 @@ def download_result():
         alignment=TA_JUSTIFY
     )
     
+    meta_style = ParagraphStyle(
+        'MetaStyle',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#666666'),
+        spaceAfter=4
+    )
+    
     # Title
-    story.append(Paragraph("AI Answer Sheet Evaluation Report", title_style))
+    story.append(Paragraph("📋 AI Answer Sheet Evaluation Report", title_style))
+    story.append(Spacer(1, 6))
+    
+    # Divider line
+    from reportlab.platypus import HRFlowable
+    story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#8b5cf6')))
     story.append(Spacer(1, 12))
     
-    # Score
+    # Score - Enhanced presentation
     score_table_data = [
-        ['Suggested Marks', f"{data['score']}/{data['max_marks']}"]
+        ['Suggested Marks', f"{data['score']}"]
     ]
     score_table = Table(score_table_data, colWidths=[2*inch, 2*inch])
     score_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (1, 0), colors.HexColor('#8b5cf6')),
         ('TEXTCOLOR', (0, 0), (1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (0, 0), (1, 0), 'CENTER'),
         ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (1, 0), 14),
+        ('FONTSIZE', (0, 0), (1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (1, 0), 12),
         ('TOPPADDING', (0, 0), (1, 0), 12),
-        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e0e0e0')),
-        ('FONTNAME', (0, 1), (1, 1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (1, 1), 12),
+        ('GRID', (0, 0), (1, 0), 1, colors.HexColor('#e0e0e0')),
+        ('FONTNAME', (0, 1), (1, 1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 1), (1, 1), 16),
         ('ALIGN', (0, 1), (1, 1), 'CENTER'),
         ('TOPPADDING', (0, 1), (1, 1), 10),
         ('BOTTOMPADDING', (0, 1), (1, 1), 10),
     ]))
     story.append(score_table)
-    story.append(Spacer(1, 16))
+    story.append(Spacer(1, 20))
     
-    # Feedback
-    story.append(Paragraph("Feedback", heading_style))
+    # Feedback Section
+    story.append(Paragraph("💬 Examiner Feedback", heading_style))
     story.append(Paragraph(data['feedback'], normal_style))
-    story.append(Spacer(1, 16))
+    story.append(Spacer(1, 18))
     
-    # Question
-    story.append(Paragraph("Question Paper", heading_style))
-    question_text = data['question'][:1000] + "..." if len(data['question']) > 1000 else data['question']
-    story.append(Paragraph(question_text, normal_style))
-    story.append(Spacer(1, 12))
+    # Page Break
+    story.append(PageBreak())
     
-    # Answer
-    story.append(Paragraph("Student Answer", heading_style))
-    answer_text = data['answer'][:1000] + "..." if len(data['answer']) > 1000 else data['answer']
-    story.append(Paragraph(answer_text, normal_style))
+    # Question Section
+    story.append(Paragraph("📖 Question Paper", heading_style))
+    story.append(Paragraph(data['question'], normal_style))
+    story.append(Spacer(1, 20))
+    
+    # Answer Section
+    story.append(PageBreak())
+    story.append(Paragraph("✍️ Student Answer", heading_style))
+    story.append(Paragraph(data['answer'], normal_style))
     
     # Answer Key (if available)
     if data.get('answer_key'):
-        story.append(Spacer(1, 16))
-        story.append(Paragraph("Answer Key", heading_style))
-        key_text = data['answer_key'][:1000] + "..." if len(data['answer_key']) > 1000 else data['answer_key']
-        story.append(Paragraph(key_text, normal_style))
+        story.append(Spacer(1, 20))
+        story.append(PageBreak())
+        story.append(Paragraph("✅ Answer Key", heading_style))
+        story.append(Paragraph(data['answer_key'], normal_style))
     
     # Build PDF
     doc.build(story)
