@@ -43,7 +43,7 @@
                     </svg>
                     <h4 class="upload-title">Drop Question Paper Here</h4>
                     <p class="upload-subtitle">or <span class="upload-link">click to browse</span></p>
-                    <p class="upload-info">Supports PDF and Images (JPG, PNG, etc.)</p>
+                    <p class="upload-info">Supports PDF and Images (JPG, PNG, etc.) • Max 20MB</p>
                     <div class="file-name" id="questionFileName"></div>
                 </div>
 
@@ -69,7 +69,7 @@
                     </svg>
                     <h4 class="upload-title">Drop Answer Sheet Here</h4>
                     <p class="upload-subtitle">or <span class="upload-link">click to browse</span></p>
-                    <p class="upload-info">Supports PDF and Images (JPG, PNG, etc.)</p>
+                    <p class="upload-info">Supports PDF and Images (JPG, PNG, etc.) • Max 20MB</p>
                     <div class="file-name" id="answerFileName"></div>
                 </div>
 
@@ -81,6 +81,34 @@
                     accept=".pdf,image/*"
                     required
                     style="display: none;">
+
+                <!-- Answer Key Upload -->
+                <label class="form-label mt-5">
+                    Answer Key (Optional)
+                </label>
+
+                <div class="drag-drop-zone" id="keyDropZone">
+                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <h4 class="upload-title">Drop Answer Key Here</h4>
+                    <p class="upload-subtitle">or <span class="upload-link">click to browse</span></p>
+                    <p class="upload-info">Supports PDF and Images (JPG, PNG, etc.) • Max 20MB</p>
+                    <div class="file-name" id="keyFileName"></div>
+                </div>
+
+                <input
+                    type="file"
+                    name="answer_key"
+                    id="keyInput"
+                    class="file-input"
+                    accept=".pdf,image/*"
+                    style="display: none;">
+
+                <!-- Error Message Display -->
+                <div id="errorMessage" class="error-message"></div>
 
                 <button
                     type="submit"
@@ -111,6 +139,9 @@
         const form = document.querySelector('#evaluateForm');
         const loadingScreen = document.getElementById('loadingScreen');
         const evaluateBtn = document.getElementById('evaluateBtn');
+        const errorMessage = document.getElementById('errorMessage');
+        
+        const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB in bytes
 
         // Question Paper Drag and Drop
         const questionDropZone = document.getElementById('questionDropZone');
@@ -124,6 +155,12 @@
         const answerFileName = document.getElementById('answerFileName');
         const answerLink = answerDropZone.querySelector('.upload-link');
 
+        // Answer Key Drag and Drop
+        const keyDropZone = document.getElementById('keyDropZone');
+        const keyInput = document.getElementById('keyInput');
+        const keyFileName = document.getElementById('keyFileName');
+        const keyLink = keyDropZone.querySelector('.upload-link');
+
         // Handle click to browse
         questionLink.addEventListener('click', (e) => {
             e.preventDefault();
@@ -135,39 +172,67 @@
             answerInput.click();
         });
 
+        keyLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            keyInput.click();
+        });
+
         // Handle file input change
         questionInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
-                updateFileName(questionFileName, e.target.files[0].name);
+                const file = e.target.files[0];
+                if (validateFile(file)) {
+                    updateFileName(questionFileName, file.name);
+                    clearError();
+                }
             }
         });
 
         answerInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
-                updateFileName(answerFileName, e.target.files[0].name);
+                const file = e.target.files[0];
+                if (validateFile(file)) {
+                    updateFileName(answerFileName, file.name);
+                    clearError();
+                }
+            }
+        });
+
+        keyInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                if (validateFile(file)) {
+                    updateFileName(keyFileName, file.name);
+                    clearError();
+                }
             }
         });
 
         // Drag and Drop for Question Paper
         questionDropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             questionDropZone.classList.add('drag-over');
         });
 
-        questionDropZone.addEventListener('dragleave', () => {
+        questionDropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             questionDropZone.classList.remove('drag-over');
         });
 
         questionDropZone.addEventListener('drop', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             questionDropZone.classList.remove('drag-over');
             
             const files = e.dataTransfer.files;
             if (files.length > 0) {
                 const file = files[0];
-                if (isValidFile(file)) {
-                    questionInput.files = files;
+                if (validateFile(file)) {
+                    setFileInput(questionInput, file);
                     updateFileName(questionFileName, file.name);
+                    clearError();
                 }
             }
         });
@@ -175,26 +240,66 @@
         // Drag and Drop for Answer Sheet
         answerDropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             answerDropZone.classList.add('drag-over');
         });
 
-        answerDropZone.addEventListener('dragleave', () => {
+        answerDropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             answerDropZone.classList.remove('drag-over');
         });
 
         answerDropZone.addEventListener('drop', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             answerDropZone.classList.remove('drag-over');
             
             const files = e.dataTransfer.files;
             if (files.length > 0) {
                 const file = files[0];
-                if (isValidFile(file)) {
-                    answerInput.files = files;
+                if (validateFile(file)) {
+                    setFileInput(answerInput, file);
                     updateFileName(answerFileName, file.name);
+                    clearError();
                 }
             }
         });
+
+        // Drag and Drop for Answer Key
+        keyDropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            keyDropZone.classList.add('drag-over');
+        });
+
+        keyDropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            keyDropZone.classList.remove('drag-over');
+        });
+
+        keyDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            keyDropZone.classList.remove('drag-over');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (validateFile(file)) {
+                    setFileInput(keyInput, file);
+                    updateFileName(keyFileName, file.name);
+                    clearError();
+                }
+            }
+        });
+
+        function setFileInput(input, file) {
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            input.files = dataTransfer.files;
+        }
 
         function updateFileName(element, fileName) {
             element.textContent = '✓ ' + fileName;
@@ -207,7 +312,58 @@
             return validExtensions.includes(fileExtension);
         }
 
-        form.addEventListener('submit', function() {
+        function validateFile(file) {
+            if (!isValidFile(file)) {
+                showError('Invalid file type. Please upload PDF or image files only.');
+                return false;
+            }
+            
+            if (file.size > MAX_FILE_SIZE) {
+                const maxSizeMB = MAX_FILE_SIZE / (1024 * 1024);
+                showError(`File size exceeds ${maxSizeMB}MB limit. Please upload a smaller file.`);
+                return false;
+            }
+            
+            return true;
+        }
+
+        function showError(message) {
+            errorMessage.textContent = '⚠️ ' + message;
+            errorMessage.classList.add('visible');
+        }
+
+        function clearError() {
+            errorMessage.textContent = '';
+            errorMessage.classList.remove('visible');
+        }
+
+        form.addEventListener('submit', function(e) {
+            clearError();
+            
+            // Validate both files are selected
+            if (!questionInput.files.length) {
+                showError('Please select a question paper.');
+                e.preventDefault();
+                return;
+            }
+            
+            if (!answerInput.files.length) {
+                showError('Please select an answer sheet.');
+                e.preventDefault();
+                return;
+            }
+            
+            // Validate file sizes
+            if (!validateFile(questionInput.files[0])) {
+                e.preventDefault();
+                return;
+            }
+            
+            if (!validateFile(answerInput.files[0])) {
+                e.preventDefault();
+                return;
+            }
+            
             loadingScreen.classList.remove('hidden');
             evaluateBtn.disabled = true;
         });

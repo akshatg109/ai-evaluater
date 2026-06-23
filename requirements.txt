@@ -5,3 +5,4 @@ pytesseract==0.3.13
 python-dotenv==1.2.2
 PyMuPDF
 pdf2image
+reportlab==4.0.9

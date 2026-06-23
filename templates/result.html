@@ -21,7 +21,7 @@
             <div class="text-center">
 
                 <div class="result-score">
-                    {{ score }}
+                    {{ score }}<span class="max-marks">/ {{ max_marks }}</span>
                 </div>
 
                 <p class="page-subtitle">
@@ -31,11 +31,15 @@
             </div>
 
             <div class="feedback-box">
+                <h3 style="color: #8b5cf6; margin-bottom: 12px;">AI Feedback</h3>
                 {{ feedback }}
             </div>
 
-            <div class="text-center mt-4">
-                <a href="/dashboard" class="btn btn-outline-light">
+            <div class="button-group">
+                <a href="/download-result" class="btn-primary-custom" style="display: inline-block; width: auto; padding: 12px 28px;">
+                    📥 Download as PDF
+                </a>
+                <a href="/dashboard" class="btn-secondary-custom">
                     Evaluate Another Answer
                 </a>
             </div>
@@ -46,4 +50,3 @@
 
 </body>
 </html>
-```

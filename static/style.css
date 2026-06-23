@@ -510,6 +510,36 @@ textarea.form-control {
     display: none;
 }
 
+/* ERROR MESSAGE */
+
+.error-message {
+    display: none;
+    margin-top: 16px;
+    padding: 16px 20px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 12px;
+    color: #fca5a5;
+    font-size: 0.95rem;
+    font-weight: 500;
+    animation: slideDown 0.3s ease;
+}
+
+.error-message.visible {
+    display: block;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
 .hero-title {
     margin-top: 24px;
 
@@ -559,6 +589,60 @@ textarea.form-control {
 
     -webkit-background-clip: text;
     color: transparent;
+}
+
+.max-marks {
+    font-size: 2.5rem;
+    color: var(--muted);
+    -webkit-background-clip: unset;
+}
+
+.button-group {
+    display: flex;
+    gap: 16px;
+    margin-top: 40px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn-secondary-custom {
+    display: inline-block;
+    padding: 16px 28px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    transition: all 0.3s ease;
+}
+
+.btn-secondary-custom:hover {
+    transform: translateY(-3px);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: white;
+}
+
+/* ERROR HANDLING */
+
+.error-icon {
+    font-size: 5rem;
+    margin-bottom: 24px;
+    animation: shake 0.5s ease;
+}
+
+@keyframes shake {
+    0%, 100% {
+        transform: translateX(0);
+    }
+    25% {
+        transform: translateX(-10px);
+    }
+    75% {
+        transform: translateX(10px);
+    }
 }
 
 .feedback-box {
