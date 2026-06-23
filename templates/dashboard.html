@@ -16,6 +16,39 @@
 
         <div class="dashboard-card">
 
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;">
+
+    <h2 style="color:white;">
+        Welcome {{ user }}
+    </h2>
+
+    <div>
+
+        {% if user == "Guest" %}
+
+            <a href="/login" class="btn btn-primary me-2">
+                Login
+            </a>
+
+            <a href="/signup" class="btn btn-success">
+                Sign Up
+            </a>
+
+        {% else %}
+
+            <a href="/history" class="btn btn-primary me-2">
+                Evaluation History
+            </a>
+
+            <a href="/logout" class="btn btn-danger">
+                Logout
+            </a>
+
+        {% endif %}
+
+    </div>
+
+</div>
             <div class="text-center mb-5">
 
                 <h1 class="page-title">

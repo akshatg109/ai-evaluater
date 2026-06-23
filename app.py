@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, session
+from flask import Flask, render_template, request, send_file, session,redirect
 from PIL import Image
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -230,7 +230,25 @@ def home():
 
 @app.route("/dashboard")
 def dashboard():
-    return render_template("dashboard.html")
+
+    user = session.get("user", "Guest")
+
+    evaluations = []
+
+    if "user" in session:
+        evaluations = (
+            supabase.table("evaluations")
+            .select("*")
+            .eq("user_email", session["user"])
+            .order("created_at", desc=True)
+            .execute()
+        ).data
+
+    return render_template(
+        "dashboard.html",
+        user=user,
+        evaluations=evaluations
+    )
 
 
 @app.route("/evaluate", methods=["POST"])
@@ -320,16 +338,24 @@ def evaluate():
 
     score = int(result["score"])
     feedback = result["feedback"]
-    
-    supabase.table("evaluations").insert({
-    "user_email": "guest",
-    "score": score,
-    "feedback": feedback,
-    "answer_key": result.get("answer_key", ""),
-    "question_text": question_text,
-    "student_answer": student_answer,
-    "report_path": ""
-}).execute()
+
+    email = session.get("user", "guest")
+
+    try:
+        supabase.table("evaluations").insert({
+            "user_email": email,
+            "score": score,
+            "feedback": feedback,
+            "answer_key": answer_key_text if answer_key_text else "",
+            "question_text": question_text,
+            "student_answer": student_answer,
+            "report_path": ""
+        }).execute()
+
+        print("✅ Saved to Supabase")
+
+    except Exception as e:
+        print("❌ Supabase Save Error:", e)
 
     # Store in session for PDF download
     session['evaluation_data'] = {
@@ -359,6 +385,82 @@ def evaluate():
         feedback=feedback,
         max_marks=max_marks
     )
+    
+@app.route("/history")
+def history():
+
+    if "user" not in session:
+        return redirect("/login")
+
+    email = session["user"]
+
+    evaluations = (
+        supabase.table("evaluations")
+        .select("*")
+        .eq("user_email", email)
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    return render_template(
+        "history.html",
+        evaluations=evaluations.data,
+        user=email
+    )
+    
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+
+    if request.method == "POST":
+
+        email = request.form["email"]
+        password = request.form["password"]
+
+        try:
+            supabase.auth.sign_up({
+                "email": email,
+                "password": password
+            })
+
+            return redirect("/login")
+
+        except Exception as e:
+            return str(e)
+
+    return render_template("signup.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+
+    if request.method == "POST":
+
+        email = request.form["email"]
+        password = request.form["password"]
+
+        try:
+
+            response = supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+
+            session["user"] = response.user.email
+
+            return redirect("/dashboard")
+
+        except Exception as e:
+            return str(e)
+
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+
+    session.clear()
+
+    return redirect("/")
 
 
 @app.route("/download-result")
