@@ -17,10 +17,38 @@ from io import BytesIO
 import json
 import os
 
+from supabase import create_client
+import os
+
+from pathlib import Path
+
+load_dotenv(dotenv_path=Path(__file__).parent / ".env")
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+print("URL =", repr(SUPABASE_URL))
+print("KEY =", repr(SUPABASE_KEY))
+
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
+)
+
+try:
+    result = supabase.table("evaluations").select("*").limit(1).execute()
+    print("✅ Supabase Connected Successfully")
+except Exception as e:
+    print("❌ Supabase Error:", e)
+
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 
-load_dotenv()
+
+
+print("OPENROUTER:", os.getenv("OPENROUTER_API_KEY"))
+print("SUPABASE_URL:", os.getenv("SUPABASE_URL"))
+print("SUPABASE_KEY:", os.getenv("SUPABASE_KEY"))
 
 client = OpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -292,6 +320,16 @@ def evaluate():
 
     score = int(result["score"])
     feedback = result["feedback"]
+    
+    supabase.table("evaluations").insert({
+    "user_email": "guest",
+    "score": score,
+    "feedback": feedback,
+    "answer_key": result.get("answer_key", ""),
+    "question_text": question_text,
+    "student_answer": student_answer,
+    "report_path": ""
+}).execute()
 
     # Store in session for PDF download
     session['evaluation_data'] = {
