@@ -19,8 +19,6 @@ import os
 from datetime import datetime
 
 from supabase import create_client
-import os
-
 from pathlib import Path
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
@@ -28,8 +26,7 @@ load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-print("URL =", repr(SUPABASE_URL))
-print("KEY =", repr(SUPABASE_KEY))
+# Environment variables loaded from .env
 
 supabase = create_client(
     SUPABASE_URL,
@@ -47,9 +44,7 @@ app.secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 
 
 
-print("OPENROUTER:", os.getenv("OPENROUTER_API_KEY"))
-print("SUPABASE_URL:", os.getenv("SUPABASE_URL"))
-print("SUPABASE_KEY:", os.getenv("SUPABASE_KEY"))
+# API credentials configured via environment variables
 
 client = OpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -74,7 +69,7 @@ def format_datetime(dt_string):
         dt = datetime.fromisoformat(dt_string.replace('Z', '+00:00'))
         # Format as: "Jun 23, 2026 at 2:30 PM"
         return dt.strftime("%b %d, %Y at %I:%M %p")
-    except:
+    except (ValueError, AttributeError):
         return dt_string
 
 
@@ -331,16 +326,16 @@ def evaluate():
     if answer_key_text:
         print("ANSWER KEY OCR:", answer_key_text)
     
-    print("\n====================")
-    print("QUESTION TEXT:")
-    print(question_text)
-
-    print("\nANSWER TEXT:")
-    print(student_answer)
-    if answer_key_text:
-        print("\nANSWER KEY TEXT:")
-        print(answer_key_text)
-    print("====================\n")
+    # Debug: Uncomment to see extracted text
+    # print("\n====================")
+    # print("QUESTION TEXT:")
+    # print(question_text)
+    # print("\nANSWER TEXT:")
+    # print(student_answer)
+    # if answer_key_text:
+    #     print("\nANSWER KEY TEXT:")
+    #     print(answer_key_text)
+    # print("====================\n")
 
     result = evaluate_answer(
         question_text,
@@ -389,8 +384,8 @@ def evaluate():
         os.remove(answer_path)
         if answer_key_path:
             os.remove(answer_key_path)
-    except:
-        pass
+    except (OSError, FileNotFoundError):
+        pass  # Files may have already been deleted
 
     return render_template(
         "result.html",
@@ -761,4 +756,5 @@ def download_result():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    debug_mode = os.getenv("FLASK_ENV") == "development"
+    app.run(host="0.0.0.0", port=5000, debug=debug_mode)
