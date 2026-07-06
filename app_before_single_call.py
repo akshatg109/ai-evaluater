@@ -99,8 +99,6 @@ def pdf_to_images(file_path):
 
     return image_paths
 
-
-
 def extract_text_with_qwen(file_path):
 
     image_paths = pdf_to_images(file_path)
@@ -143,76 +141,6 @@ Return ONLY the extracted text.
     )
 
     return response.choices[0].message.content.strip()
-
-def file_to_images(file_path):
-
-    ext = os.path.splitext(file_path)[1].lower()
-
-    if ext == ".pdf":
-        return pdf_to_images(file_path)
-
-    elif ext in [".png", ".jpg", ".jpeg"]:
-        return [file_path]
-
-    else:
-        raise ValueError(f"Unsupported file type: {ext}")
-
-
-def extract_documents_with_qwen(
-    question_path,
-    answer_path,
-    answer_key_path=None
-):
-
-    question_images = file_to_images(question_path)
-    answer_images = file_to_images(answer_path)
-
-    answer_key_images = []
-
-    if answer_key_path:
-        answer_key_images = file_to_images(answer_key_path)
-
-    print("Question Pages:", len(question_images))
-    print("Answer Pages:", len(answer_images))
-    print("Answer Key Pages:", len(answer_key_images))
-
-    return {
-        "question_images": question_images,
-        "answer_images": answer_images,
-        "answer_key_images": answer_key_images
-    }
-
-
-def evaluate_complete_submission(
-    question_path,
-    answer_path,
-    answer_key_path=None
-):
-
-    question_text = extract_text_with_qwen(question_path)
-
-    student_answer = extract_text_with_qwen(answer_path)
-
-    answer_key_text = None
-
-    if answer_key_path:
-        answer_key_text = extract_text_with_qwen(answer_key_path)
-
-    max_marks = extract_max_marks(question_text)
-
-    result = evaluate_answer(
-        question_text,
-        student_answer,
-        max_marks,
-        answer_key_text
-    )
-
-    result["question_text"] = question_text
-    result["student_answer"] = student_answer
-    result["answer_key"] = answer_key_text
-    result["max_marks"] = max_marks
-
-    return result
 
 def format_datetime(dt_string):
     """Format ISO datetime string to readable format"""
@@ -441,42 +369,37 @@ def evaluate():
         answer_key_file.save(answer_key_path)
         answer_key_text = extract_text_with_qwen(answer_key_path)
 
-        result = evaluate_complete_submission(
-        question_path,
-        answer_path,
-        answer_key_path
-    )
+    question_text = extract_text_with_qwen(question_path)
 
-    question_text = result["question_text"]
-    student_answer = result["student_answer"]
-    answer_key_text = result["answer_key"]
-    max_marks = result["max_marks"]
+    max_marks = extract_max_marks(question_text)
+
+    student_answer = extract_text_with_qwen(answer_path)
 
     print("QUESTION OCR:", question_text)
     print("ANSWER OCR:", student_answer)
     if answer_key_text:
         print("ANSWER KEY OCR:", answer_key_text)
+    
+    # Debug: Uncomment to see extracted text
+    # print("\n====================")
+    # print("QUESTION TEXT:")
+    # print(question_text)
+    # print("\nANSWER TEXT:")
+    # print(student_answer)
+    # if answer_key_text:
+    #     print("\nANSWER KEY TEXT:")
+    #     print(answer_key_text)
+    # print("====================\n")
+
+    result = evaluate_answer(
+        question_text,
+        student_answer,
+        max_marks,
+        answer_key_text
+    )
 
     score = int(result["score"])
     feedback = result["feedback"]
-
-    email = session.get("user", "guest")
-
-    try:
-        supabase.table("evaluations").insert({
-            "user_email": email,
-            "score": score,
-            "feedback": feedback,
-            "answer_key": answer_key_text if answer_key_text else "",
-            "question_text": question_text,
-            "student_answer": student_answer,
-            "report_path": ""
-        }).execute()
-
-        print("✅ Saved to Supabase")
-
-    except Exception as e:
-        print("❌ Supabase Save Error:", e)
 
     email = session.get("user", "guest")
 
@@ -516,7 +439,7 @@ def evaluate():
         if answer_key_path:
             os.remove(answer_key_path)
     except (OSError, FileNotFoundError):
-         pass  # Files may have already been deleted
+        pass  # Files may have already been deleted
 
     return render_template(
         "result.html",
