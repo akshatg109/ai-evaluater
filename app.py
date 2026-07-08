@@ -45,13 +45,15 @@ app.secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 
 # API credentials configured via environment variables
 
+api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+
 print("========== OPENROUTER DEBUG ==========")
-print("API key exists:", bool(os.getenv("OPENROUTER_API_KEY")))
-print("API key prefix:", os.getenv("OPENROUTER_API_KEY", "")[:10])
+print("API key exists:", bool(api_key))
+print("API key prefix:", api_key[:10])
 print("======================================")
 
 client = OpenAI(
-    api_key=os.getenv("OPENROUTER_API_KEY"),
+    api_key=api_key,
     base_url="https://openrouter.ai/api/v1",
     timeout=60
 )
