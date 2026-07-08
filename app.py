@@ -45,9 +45,15 @@ app.secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 
 # API credentials configured via environment variables
 
+print("========== OPENROUTER DEBUG ==========")
+print("API key exists:", bool(os.getenv("OPENROUTER_API_KEY")))
+print("API key prefix:", os.getenv("OPENROUTER_API_KEY", "")[:10])
+print("======================================")
+
 client = OpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY"),
-    base_url="https://openrouter.ai/api/v1"
+    base_url="https://openrouter.ai/api/v1",
+    timeout=60
 )
 
 # Configuration
@@ -132,17 +138,29 @@ Return ONLY the extracted text.
             }
         })
 
-    response = client.chat.completions.create(
-        model="qwen/qwen3-vl-32b-instruct",
-        messages=[
-            {
-                "role": "user",
-                "content": content
-            }
-        ]
-    )
+    try:
+        response = client.chat.completions.create(
+            model="qwen/qwen3-vl-32b-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": content
+                }
+            ]
+        )
 
-    return response.choices[0].message.content.strip()
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        import traceback
+
+        print("\n========== OPENROUTER OCR ERROR ==========")
+        print("Exception:", repr(e))
+        print("Cause:", repr(e.__cause__))
+        traceback.print_exc()
+        print("==========================================\n")
+
+        raise
 
 def file_to_images(file_path):
 
@@ -349,12 +367,18 @@ Return ONLY valid JSON in this format:
         return json.loads(content)
 
     except Exception as e:
-        print("Qwen Error:", e)
+      import traceback
 
-        return {
-            "score": 0,
-            "feedback": "AI evaluation is temporarily unavailable. Please try again later."
-        }
+    print("\n========== QWEN EVALUATION ERROR ==========")
+    print("Exception:", repr(e))
+    print("Cause:", repr(e.__cause__))
+    traceback.print_exc()
+    print("===========================================\n")
+
+    return {
+        "score": 0,
+        "feedback": "AI evaluation is temporarily unavailable."
+    }
 
 
 @app.route("/")
