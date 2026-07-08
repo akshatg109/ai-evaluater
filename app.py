@@ -430,18 +430,19 @@ def evaluate():
     question_file.save(question_path)
     answer_file.save(answer_path)
 
-    # Extract answer key if provided
+        # Extract answer key if provided
     answer_key_text = None
     answer_key_path = None
+
     if answer_key_file:
         answer_key_path = os.path.join(
             app.config["UPLOAD_FOLDER"],
             secure_filename(answer_key_file.filename)
         )
         answer_key_file.save(answer_key_path)
-        answer_key_text = extract_text_with_qwen(answer_key_path)
 
-        result = evaluate_complete_submission(
+    # Always evaluate, whether or not an answer key exists
+    result = evaluate_complete_submission(
         question_path,
         answer_path,
         answer_key_path
