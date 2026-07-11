@@ -20,18 +20,6 @@ The platform allows teachers to upload a **question paper**, a **student answer 
 
 ---
 
-# 📸 Screenshots
-
-## Landing Page
-
-![Landing Page](screenshots/landing-page.png)
-
-## Evaluation Dashboard
-
-![Dashboard](screenshots/dashboard.png)
-
----
-
 # ✨ Features
 
 - Upload **PDF**, **JPG**, and **PNG** files
