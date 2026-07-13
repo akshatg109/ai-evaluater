@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AI Evaluater
 
 <p align="center">
@@ -119,3 +120,44 @@ Browser  ──▶  Flask App  ──▶  OpenRouter (Qwen3 VL)
 ## License
 
 MIT
+=======
+# AI Answer Sheet Evaluator
+
+A Flask application that reads question papers and handwritten answer sheets with Qwen, evaluates submissions, stores optional Supabase history, and creates PDF reports.
+
+## Project structure
+
+```text
+app.py                         Start the application: python3 app.py
+requirements.txt               Python dependencies
+.env                           Local secrets (not committed)
+
+evaluator_app/                All application code
+  application.py               Flask application factory
+  config.py                    Environment-backed settings
+  extensions.py                OpenRouter and Supabase clients
+  routes/                      HTTP endpoints
+  services/                    Qwen document reading, grading, PDF reports
+  templates/                   Jinja HTML pages
+  static/                      CSS and browser-side behaviour
+
+tests/                         Automated smoke tests
+uploads/                       Temporary uploads; cleaned after each evaluation
+data/legacy_database.db        Preserved local database; not used by the app
+```
+
+## Run locally
+
+1. Create `.env` from `.env.example`, then add `OPENROUTER_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, and a long random `SECRET_KEY`.
+2. Install dependencies: `pip install -r requirements.txt`
+3. Start the app: `python3 app.py`
+
+## Evaluation workflow
+
+Each submission uses two Qwen calls:
+
+1. Read the question paper, student answer (including handwriting), and optional answer key; return transcriptions and maximum marks.
+2. Grade the transcribed answer and return a score and feedback.
+
+PDF, PNG, JPG, and JPEG uploads are supported.
+>>>>>>> 6dec33b (Clean architecture and reduced api calls)

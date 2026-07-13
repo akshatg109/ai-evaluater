@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Answer Sheet Evaluator</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+    <div class="page-container">
+
+        <div class="dashboard-card">
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;">
+
+    <h2 style="color:white;">
+        Welcome {{ user }}
+    </h2>
+
+    <div>
+
+        {% if user == "Guest" %}
+
+            <a href="/login" class="btn btn-primary me-2">
+                Login
+            </a>
+
+            <a href="/signup" class="btn btn-success">
+                Sign Up
+            </a>
+
+        {% else %}
+
+            <a href="/history" class="btn btn-primary me-2">
+                Evaluation History
+            </a>
+
+            <a href="/logout" class="btn btn-danger">
+                Logout
+            </a>
+
+        {% endif %}
+
+    </div>
+
+</div>
+            <div class="text-center mb-5">
+
+                <h1 class="page-title">
+                    AI Answer Sheet Evaluator
+                </h1>
+
+                <p class="page-subtitle">
+                    Upload a question paper and a student's answer sheet to receive AI-generated marks and feedback.
+                </p>
+
+            </div>
+
+            <form action="/evaluate" method="POST" enctype="multipart/form-data" id="evaluateForm">
+
+                <!-- Question Paper Upload -->
+                <label class="form-label">
+                    Question Paper
+                </label>
+
+                <div class="drag-drop-zone" id="questionDropZone">
+                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <h4 class="upload-title">Drop Question Paper Here</h4>
+                    <p class="upload-subtitle">or <span class="upload-link">click to browse</span></p>
+                    <p class="upload-info">Supports PDF, JPG, and PNG. Handwritten answers supported. Max 20MB</p>
+                    <div class="file-name" id="questionFileName"></div>
+                </div>
+
+                <input
+                    type="file"
+                    name="question_file"
+                    id="questionInput"
+                    class="file-input"
+                    accept=".pdf,image/*"
+                    required
+                    style="display: none;">
+
+                <!-- Answer Sheet Upload -->
+                <label class="form-label mt-5">
+                    Student Answer Sheet
+                </label>
+
+                <div class="drag-drop-zone" id="answerDropZone">
+                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <h4 class="upload-title">Drop Answer Sheet Here</h4>
+                    <p class="upload-subtitle">or <span class="upload-link">click to browse</span></p>
+                    <p class="upload-info">Supports PDF, JPG, and PNG. Handwritten answers supported. Max 20MB</p>
+                    <div class="file-name" id="answerFileName"></div>
+                </div>
+
+                <input
+                    type="file"
+                    name="answer_file"
+                    id="answerInput"
+                    class="file-input"
+                    accept=".pdf,image/*"
+                    required
+                    style="display: none;">
+
+                <!-- Answer Key Upload -->
+                <label class="form-label mt-5">
+                    Answer Key (Optional)
+                </label>
+
+                <div class="drag-drop-zone" id="keyDropZone">
+                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <h4 class="upload-title">Drop Answer Key Here</h4>
+                    <p class="upload-subtitle">or <span class="upload-link">click to browse</span></p>
+                    <p class="upload-info">Supports PDF, JPG, and PNG. Handwritten answers supported. Max 20MB</p>
+                    <div class="file-name" id="keyFileName"></div>
+                </div>
+
+                <input
+                    type="file"
+                    name="answer_key"
+                    id="keyInput"
+                    class="file-input"
+                    accept=".pdf,image/*"
+                    style="display: none;">
+
+                <!-- Error Message Display -->
+                <div id="errorMessage" class="error-message"></div>
+
+                <button
+                    type="submit"
+                    class="btn-primary-custom mt-5"
+                    id="evaluateBtn">
+                    Evaluate Answer Sheet
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen hidden">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h2 class="loading-title">Evaluating Answer Sheet</h2>
+            <p class="loading-subtitle">AI is analyzing your submission... This may take a moment.</p>
+            <div class="loading-bar">
+                <div class="loading-progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.querySelector('#evaluateForm');
+        const loadingScreen = document.getElementById('loadingScreen');
+        const evaluateBtn = document.getElementById('evaluateBtn');
+        const errorMessage = document.getElementById('errorMessage');
+
+        const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB in bytes
+
+        // Question Paper Drag and Drop
+        const questionDropZone = document.getElementById('questionDropZone');
+        const questionInput = document.getElementById('questionInput');
+        const questionFileName = document.getElementById('questionFileName');
+        const questionLink = questionDropZone.querySelector('.upload-link');
+
+        // Answer Sheet Drag and Drop
+        const answerDropZone = document.getElementById('answerDropZone');
+        const answerInput = document.getElementById('answerInput');
+        const answerFileName = document.getElementById('answerFileName');
+        const answerLink = answerDropZone.querySelector('.upload-link');
+
+        // Answer Key Drag and Drop
+        const keyDropZone = document.getElementById('keyDropZone');
+        const keyInput = document.getElementById('keyInput');
+        const keyFileName = document.getElementById('keyFileName');
+        const keyLink = keyDropZone.querySelector('.upload-link');
+
+        // Handle click to browse
+        questionLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            questionInput.click();
+        });
+
+        answerLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            answerInput.click();
+        });
+
+        keyLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            keyInput.click();
+        });
+
+        // Handle file input change
+        questionInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                if (validateFile(file)) {
+                    updateFileName(questionFileName, file.name);
+                    clearError();
+                }
+            }
+        });
+
+        answerInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                if (validateFile(file)) {
+                    updateFileName(answerFileName, file.name);
+                    clearError();
+                }
+            }
+        });
+
+        keyInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                if (validateFile(file)) {
+                    updateFileName(keyFileName, file.name);
+                    clearError();
+                }
+            }
+        });
+
+        // Drag and Drop for Question Paper
+        questionDropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            questionDropZone.classList.add('drag-over');
+        });
+
+        questionDropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            questionDropZone.classList.remove('drag-over');
+        });
+
+        questionDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            questionDropZone.classList.remove('drag-over');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (validateFile(file)) {
+                    setFileInput(questionInput, file);
+                    updateFileName(questionFileName, file.name);
+                    clearError();
+                }
+            }
+        });
+
+        // Drag and Drop for Answer Sheet
+        answerDropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            answerDropZone.classList.add('drag-over');
+        });
+
+        answerDropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            answerDropZone.classList.remove('drag-over');
+        });
+
+        answerDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            answerDropZone.classList.remove('drag-over');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (validateFile(file)) {
+                    setFileInput(answerInput, file);
+                    updateFileName(answerFileName, file.name);
+                    clearError();
+                }
+            }
+        });
+
+        // Drag and Drop for Answer Key
+        keyDropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            keyDropZone.classList.add('drag-over');
+        });
+
+        keyDropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            keyDropZone.classList.remove('drag-over');
+        });
+
+        keyDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            keyDropZone.classList.remove('drag-over');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (validateFile(file)) {
+                    setFileInput(keyInput, file);
+                    updateFileName(keyFileName, file.name);
+                    clearError();
+                }
+            }
+        });
+
+        function setFileInput(input, file) {
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            input.files = dataTransfer.files;
+        }
+
+        function updateFileName(element, fileName) {
+            element.textContent = 'âœ“ ' + fileName;
+            element.classList.add('visible');
+        }
+
+        function isValidFile(file) {
+            const validExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+            const fileExtension = file.name.split('.').pop().toLowerCase();
+            return validExtensions.includes(fileExtension);
+        }
+
+        function validateFile(file) {
+            if (!isValidFile(file)) {
+                showError('Invalid file type. Please upload PDF or image files only.');
+                return false;
+            }
+
+            if (file.size > MAX_FILE_SIZE) {
+                const maxSizeMB = MAX_FILE_SIZE / (1024 * 1024);
+                showError(`File size exceeds ${maxSizeMB}MB limit. Please upload a smaller file.`);
+                return false;
+            }
+
+            return true;
+        }
+
+        function showError(message) {
+            errorMessage.textContent = 'âš ï¸ ' + message;
+            errorMessage.classList.add('visible');
+        }
+
+        function clearError() {
+            errorMessage.textContent = '';
+            errorMessage.classList.remove('visible');
+        }
+
+        form.addEventListener('submit', function(e) {
+            clearError();
+
+            // Validate both files are selected
+            if (!questionInput.files.length) {
+                showError('Please select a question paper.');
+                e.preventDefault();
+                return;
+            }
+
+            if (!answerInput.files.length) {
+                showError('Please select an answer sheet.');
+                e.preventDefault();
+                return;
+            }
+
+            // Validate file sizes
+            if (!validateFile(questionInput.files[0])) {
+                e.preventDefault();
+                return;
+            }
+
+            if (!validateFile(answerInput.files[0])) {
+                e.preventDefault();
+                return;
+            }
+
+            loadingScreen.classList.remove('hidden');
+            evaluateBtn.disabled = true;
+        });
+    </script>
+
+</body>
+</html>
