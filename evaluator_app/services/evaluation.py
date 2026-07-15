@@ -64,7 +64,11 @@ def read_submission_documents(question_path, answer_path, client, model, answer_
         "text": """
 You are reading exam documents. The following labelled image groups are a QUESTION PAPER, a STUDENT ANSWER, and optionally an ANSWER KEY.
 
-Read every page in every group. The student answer may be handwritten. Transcribe readable handwriting faithfully; do not correct spelling, grammar, or calculations. Use [illegible] only where text truly cannot be read, and never invent missing text.
+Read every page in every group. The student answer may be handwritten. The images between BEGIN STUDENT ANSWER and END STUDENT ANSWER are the complete uploaded submission: do NOT assume additional pages exist.
+
+Transcribe readable handwriting faithfully; do not correct spelling, grammar, or calculations. Use [illegible] only where text truly cannot be read, and never invent, complete, or infer student-answer text from the question paper or answer key.
+
+Audit the submitted pages against the questions in the question paper. For each question, report one of: visible (a complete readable answer is visible), partial (only part of an answer is visible, including a cut-off answer), unreadable (an answer area is present but cannot be read), or not_found (no answer is visible in the uploaded student-answer pages). This audit must be based only on the student-answer images. In particular, use not_found when a question appears in the question paper but no corresponding response appears in the uploaded pages.
 
 Determine the TOTAL maximum marks from the QUESTION PAPER.
 
@@ -73,7 +77,11 @@ Return ONLY valid JSON in this exact shape:
   "question_text": "complete question-paper transcription",
   "student_answer": "complete student-answer transcription",
   "answer_key": "complete answer-key transcription or null when absent",
-  "max_marks": 100
+  "max_marks": 100,
+  "answer_visibility": [
+    {"question": "Q1", "status": "visible"},
+    {"question": "Q2", "status": "not_found"}
+  ]
 }
 """,
     }]
@@ -95,14 +103,34 @@ Return ONLY valid JSON in this exact shape:
             "student_answer": str(result["student_answer"]).strip(),
             "answer_key": str(result["answer_key"]).strip() if result.get("answer_key") else None,
             "max_marks": int(result["max_marks"]),
+            "answer_visibility": result.get("answer_visibility", []),
         }
     finally:
         for image_path in generated_images:
             image_path.unlink(missing_ok=True)
 
 
-def evaluate_answer(question, student_answer, max_marks, client, model, answer_key=None):
+def evaluate_answer(
+    question,
+    student_answer,
+    max_marks,
+    client,
+    model,
+    answer_key=None,
+    answer_visibility=None,
+):
     """Generate a structured score and feedback response in the second call."""
+    visibility_audit = json.dumps(answer_visibility or [], ensure_ascii=False)
+    visibility_rules = f"""
+Student-answer visibility audit (created only from the uploaded answer-sheet pages):
+{visibility_audit}
+
+This audit is binding. Evaluate ONLY content visible in the uploaded student-answer pages.
+- A question marked not_found receives 0 marks. Include the exact phrase "Answer not found in uploaded pages." in its feedback.
+- A question marked partial or unreadable receives marks only for the readable, visible portion; do not reconstruct or infer the rest.
+- Never assume missing pages or use the answer key to supply a student answer.
+"""
+
     if answer_key:
         prompt = f"""
 You are an experienced examiner evaluating student answers STRICTLY against the provided answer key.
@@ -120,6 +148,7 @@ Maximum Marks:
 {max_marks}
 
 The answer key is the only source of truth. Award marks only for points that match it. Identify covered key points, missing key points, and extra incorrect information.
+{visibility_rules}
 
 Return ONLY valid JSON:
 {{"score": integer between 0 and {max_marks}, "feedback": "detailed feedback"}}
@@ -138,6 +167,7 @@ Maximum Marks:
 {max_marks}
 
 Determine the ideal key points, then evaluate accuracy, completeness, relevance, and clarity.
+{visibility_rules}
 
 Return ONLY valid JSON:
 {{"score": integer between 0 and {max_marks}, "feedback": "brief feedback including covered and missing key points"}}
@@ -174,5 +204,6 @@ def evaluate_submission(question_path, answer_path, client, model, answer_key_pa
         client,
         model,
         documents["answer_key"],
+        documents["answer_visibility"],
     )
     return {**documents, **evaluation}

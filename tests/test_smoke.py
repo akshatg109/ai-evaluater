@@ -76,6 +76,7 @@ class ApplicationSmokeTests(unittest.TestCase):
             "student_answer": "4",
             "answer_key": None,
             "max_marks": 5,
+            "answer_visibility": [{"question": "Q1", "status": "visible"}],
         })
         grader_response = json.dumps({"score": 5, "feedback": "Correct answer."})
         model = FakeClient([reader_response, grader_response])
@@ -86,6 +87,10 @@ class ApplicationSmokeTests(unittest.TestCase):
         self.assertEqual(len(model.completions.calls), 2)
         reader_prompt = model.completions.calls[0]["messages"][0]["content"][0]["text"]
         self.assertIn("handwritten", reader_prompt.lower())
+        self.assertIn("do not assume additional pages exist", reader_prompt.lower())
+        grader_prompt = model.completions.calls[1]["messages"][0]["content"]
+        self.assertIn("question marked not_found receives 0 marks", grader_prompt.lower())
+        self.assertIn('"Q1"', grader_prompt)
 
     def test_pdf_report_generation(self):
         report = generate_evaluation_report({
