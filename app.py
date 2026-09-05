@@ -383,6 +383,96 @@ Return ONLY valid JSON in this format:
     }
 
 
+def generate_report_buffer(data):
+    """Build a PDF in memory from evaluation `data` and return a BytesIO buffer."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=0.75*inch,
+        leftMargin=0.75*inch,
+        topMargin=0.75*inch,
+        bottomMargin=0.75*inch
+    )
+
+    story = []
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        'CustomTitle', parent=styles['Heading1'], fontSize=24,
+        textColor=colors.HexColor('#8b5cf6'), spaceAfter=12,
+        alignment=TA_CENTER, fontName='Helvetica-Bold'
+    )
+
+    heading_style = ParagraphStyle(
+        'CustomHeading', parent=styles['Heading2'], fontSize=14,
+        textColor=colors.HexColor('#3b82f6'), spaceAfter=10,
+        spaceBefore=12, fontName='Helvetica-Bold'
+    )
+
+    normal_style = ParagraphStyle(
+        'CustomNormal', parent=styles['Normal'], fontSize=11,
+        spaceAfter=10, alignment=TA_JUSTIFY
+    )
+
+    meta_style = ParagraphStyle(
+        'MetaStyle', parent=styles['Normal'], fontSize=10,
+        textColor=colors.HexColor('#666666'), spaceAfter=4
+    )
+
+    # Header
+    story.append(Paragraph("📋 AI Answer Sheet Evaluation Report", title_style))
+    story.append(Spacer(1, 6))
+    from reportlab.platypus import HRFlowable
+    story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#8b5cf6')))
+    story.append(Spacer(1, 12))
+
+    if data.get('created_at'):
+        story.append(Paragraph(f"<b>Evaluation Date:</b> {data['created_at']}", meta_style))
+        story.append(Spacer(1, 12))
+
+    # Score
+    score_table_data = [[ 'Suggested Marks', f"{data.get('score', 0)}" ]]
+    score_table = Table(score_table_data, colWidths=[2*inch, 2*inch])
+    score_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (1, 0), colors.HexColor('#8b5cf6')),
+        ('TEXTCOLOR', (0, 0), (1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (1, 0), 'CENTER'),
+        ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (1, 0), 12),
+        ('TOPPADDING', (0, 0), (1, 0), 12),
+        ('GRID', (0, 0), (1, 0), 1, colors.HexColor('#e0e0e0')),
+    ]))
+    story.append(score_table)
+    story.append(Spacer(1, 20))
+
+    # Feedback
+    story.append(Paragraph("💬 Examiner Feedback", heading_style))
+    story.append(Paragraph(data.get('feedback', ''), normal_style))
+    story.append(Spacer(1, 18))
+
+    # Content sections
+    story.append(PageBreak())
+    story.append(Paragraph("📖 Question Paper", heading_style))
+    story.append(Paragraph(data.get('question', ''), normal_style))
+    story.append(Spacer(1, 20))
+
+    story.append(PageBreak())
+    story.append(Paragraph("✍️ Student Answer", heading_style))
+    story.append(Paragraph(data.get('answer', ''), normal_style))
+
+    if data.get('answer_key'):
+        story.append(Spacer(1, 20))
+        story.append(PageBreak())
+        story.append(Paragraph("✅ Answer Key", heading_style))
+        story.append(Paragraph(data.get('answer_key', ''), normal_style))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
 @app.route("/")
 def home():
     return render_template("home.html")
@@ -662,122 +752,8 @@ def download_history(eval_id):
         print(f"Error fetching evaluation: {e}")
         return "Error retrieving evaluation", 500
     
-    # Generate PDF (reuse existing logic)
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        rightMargin=0.75*inch,
-        leftMargin=0.75*inch,
-        topMargin=0.75*inch,
-        bottomMargin=0.75*inch
-    )
-    
-    story = []
-    styles = getSampleStyleSheet()
-    
-    # Custom styles
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#8b5cf6'),
-        spaceAfter=12,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-    
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.HexColor('#3b82f6'),
-        spaceAfter=10,
-        spaceBefore=12,
-        fontName='Helvetica-Bold'
-    )
-    
-    normal_style = ParagraphStyle(
-        'CustomNormal',
-        parent=styles['Normal'],
-        fontSize=11,
-        spaceAfter=10,
-        alignment=TA_JUSTIFY
-    )
-    
-    meta_style = ParagraphStyle(
-        'MetaStyle',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=colors.HexColor('#666666'),
-        spaceAfter=4
-    )
-    
-    # Title
-    story.append(Paragraph("📋 AI Answer Sheet Evaluation Report", title_style))
-    story.append(Spacer(1, 6))
-    
-    # Divider line
-    from reportlab.platypus import HRFlowable
-    story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#8b5cf6')))
-    story.append(Spacer(1, 12))
-    
-    # Metadata section
-    story.append(Paragraph(f"<b>Evaluation Date:</b> {data['created_at']}", meta_style))
-    story.append(Spacer(1, 12))
-    
-    # Score - Enhanced presentation
-    score_table_data = [
-        ['Suggested Marks', f"{data['score']}"]
-    ]
-    score_table = Table(score_table_data, colWidths=[2*inch, 2*inch])
-    score_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (1, 0), colors.HexColor('#8b5cf6')),
-        ('TEXTCOLOR', (0, 0), (1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (1, 0), 'CENTER'),
-        ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (1, 0), 12),
-        ('TOPPADDING', (0, 0), (1, 0), 12),
-        ('GRID', (0, 0), (1, 0), 1, colors.HexColor('#e0e0e0')),
-        ('FONTNAME', (0, 1), (1, 1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 1), (1, 1), 16),
-        ('ALIGN', (0, 1), (1, 1), 'CENTER'),
-        ('TOPPADDING', (0, 1), (1, 1), 10),
-        ('BOTTOMPADDING', (0, 1), (1, 1), 10),
-    ]))
-    story.append(score_table)
-    story.append(Spacer(1, 20))
-    
-    # Feedback Section
-    story.append(Paragraph("💬 Examiner Feedback", heading_style))
-    story.append(Paragraph(data['feedback'], normal_style))
-    story.append(Spacer(1, 18))
-    
-    # Page Break
-    story.append(PageBreak())
-    
-    # Question Section
-    story.append(Paragraph("📖 Question Paper", heading_style))
-    story.append(Paragraph(data['question'], normal_style))
-    story.append(Spacer(1, 20))
-    
-    # Answer Section
-    story.append(PageBreak())
-    story.append(Paragraph("✍️ Student Answer", heading_style))
-    story.append(Paragraph(data['answer'], normal_style))
-    
-    # Answer Key (if available)
-    if data.get('answer_key'):
-        story.append(Spacer(1, 20))
-        story.append(PageBreak())
-        story.append(Paragraph("✅ Answer Key", heading_style))
-        story.append(Paragraph(data['answer_key'], normal_style))
-    
-    # Build PDF
-    doc.build(story)
-    buffer.seek(0)
-    
+    # Use shared PDF builder
+    buffer = generate_report_buffer(data)
     return send_file(
         buffer,
         mimetype='application/pdf',
@@ -853,58 +829,8 @@ def download_result():
     story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#8b5cf6')))
     story.append(Spacer(1, 12))
     
-    # Score - Enhanced presentation
-    score_table_data = [
-        ['Suggested Marks', f"{data['score']}"]
-    ]
-    score_table = Table(score_table_data, colWidths=[2*inch, 2*inch])
-    score_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (1, 0), colors.HexColor('#8b5cf6')),
-        ('TEXTCOLOR', (0, 0), (1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (1, 0), 'CENTER'),
-        ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (1, 0), 12),
-        ('TOPPADDING', (0, 0), (1, 0), 12),
-        ('GRID', (0, 0), (1, 0), 1, colors.HexColor('#e0e0e0')),
-        ('FONTNAME', (0, 1), (1, 1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 1), (1, 1), 16),
-        ('ALIGN', (0, 1), (1, 1), 'CENTER'),
-        ('TOPPADDING', (0, 1), (1, 1), 10),
-        ('BOTTOMPADDING', (0, 1), (1, 1), 10),
-    ]))
-    story.append(score_table)
-    story.append(Spacer(1, 20))
-    
-    # Feedback Section
-    story.append(Paragraph("💬 Examiner Feedback", heading_style))
-    story.append(Paragraph(data['feedback'], normal_style))
-    story.append(Spacer(1, 18))
-    
-    # Page Break
-    story.append(PageBreak())
-    
-    # Question Section
-    story.append(Paragraph("📖 Question Paper", heading_style))
-    story.append(Paragraph(data['question'], normal_style))
-    story.append(Spacer(1, 20))
-    
-    # Answer Section
-    story.append(PageBreak())
-    story.append(Paragraph("✍️ Student Answer", heading_style))
-    story.append(Paragraph(data['answer'], normal_style))
-    
-    # Answer Key (if available)
-    if data.get('answer_key'):
-        story.append(Spacer(1, 20))
-        story.append(PageBreak())
-        story.append(Paragraph("✅ Answer Key", heading_style))
-        story.append(Paragraph(data['answer_key'], normal_style))
-    
-    # Build PDF
-    doc.build(story)
-    buffer.seek(0)
-    
+    # Use shared PDF builder
+    buffer = generate_report_buffer(data)
     return send_file(
         buffer,
         mimetype='application/pdf',

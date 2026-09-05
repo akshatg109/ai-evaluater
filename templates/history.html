@@ -1,165 +1,59 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Evaluation History</title>
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
-
-<style>
-
-body{
-    background:#030712;
-    color:white;
-    min-height:100vh;
-}
-
-.container-box{
-    max-width:1200px;
-    margin:50px auto;
-    padding:30px;
-}
-
-.title{
-    font-size:3rem;
-    font-weight:800;
-    margin-bottom:20px;
-}
-
-.back-btn{
-    text-decoration:none;
-    color:#a78bfa;
-    font-weight:600;
-}
-
-.history-card{
-    background:rgba(15,23,42,.8);
-    border:1px solid rgba(255,255,255,.08);
-    border-radius:20px;
-    padding:25px;
-    margin-bottom:20px;
-}
-
-.score-badge{
-    display:inline-block;
-    padding:10px 18px;
-    border-radius:12px;
-
-    background:linear-gradient(
-        135deg,
-        #8b5cf6,
-        #3b82f6
-    );
-
-    font-weight:700;
-}
-
-.date{
-    color:#94a3b8;
-    font-size:.9rem;
-}
-
-.feedback{
-    color:#cbd5e1;
-    line-height:1.7;
-    margin-top:15px;
-}
-
-.empty{
-    text-align:center;
-    color:#94a3b8;
-    padding:60px;
-}
-
-.download-btn{
-    background:linear-gradient(
-        135deg,
-        #8b5cf6,
-        #3b82f6
-    );
-    border:none;
-    color:white;
-    padding:8px 16px;
-    border-radius:8px;
-    cursor:pointer;
-    font-weight:600;
-    text-decoration:none;
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-    font-size:0.9rem;
-    transition:transform 0.2s;
-}
-
-.download-btn:hover{
-    transform:translateY(-2px);
-    color:white;
-}
-
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evaluation History - AI Evaluator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-
 <body>
+    <div class="app-shell">
+        {% include '_navbar.html' %}
 
-<div class="container-box">
+        <main class="page-container">
+            <section class="dashboard-card" aria-labelledby="historyTitle">
+                <span class="eyebrow">Saved evaluations</span>
+                <h1 class="page-title mt-3" id="historyTitle">Evaluation history</h1>
+                <p class="page-subtitle">Review previous AI evaluations and download PDF reports. Percentages are shown on the result page; history uses score-only display because older records do not store maximum marks.</p>
 
-    <a href="/dashboard" class="back-btn">
-        ← Back to Dashboard
-    </a>
-
-    <h1 class="title">
-        Evaluation History
-    </h1>
-
-    {% if evaluations %}
-
-        {% for eval in evaluations %}
-
-        <div class="history-card">
-
-            <div class="d-flex justify-content-between align-items-center" style="margin-bottom:15px;">
-
-                <div class="date">
-                    📅 {{ eval.formatted_date }}
+                <div class="history-toolbar">
+                    <div>
+                        <span class="status-badge ready">{{ evaluations|length if evaluations else 0 }} total</span>
+                    </div>
+                    <a href="/dashboard" class="btn-primary-custom">New evaluation</a>
                 </div>
 
-                <div class="score-badge">
-                    Score: {{ eval.score }}
-                </div>
+                {% if evaluations %}
+                    <div class="history-grid">
+                        {% for eval in evaluations %}
+                            <article class="history-card" aria-label="Evaluation from {{ eval.formatted_date }}">
+                                <div>
+                                    <div class="history-date">{{ eval.formatted_date }}</div>
+                                    <h3 class="mt-2 mb-0">AI evaluation report</h3>
+                                    <p class="feedback-preview">{{ eval.feedback }}</p>
+                                </div>
 
-            </div>
+                                <div class="history-actions">
+                                    <span class="score-badge">Score: {{ eval.score }}</span>
+                                    <span class="btn-small is-disabled" aria-disabled="true" title="Viewing saved results requires a backend result route">View Result</span>
+                                    <a href="/download-history/{{ eval.id }}" class="btn-small" aria-label="Download PDF for evaluation from {{ eval.formatted_date }}">Download PDF</a>
+                                </div>
+                            </article>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon" aria-hidden="true">□</div>
+                        <h2>No evaluations yet</h2>
+                        <p class="text-muted-custom">Upload a question paper and answer sheet to create your first saved evaluation.</p>
+                        <a href="/dashboard" class="btn-primary-custom mt-3">Start your first evaluation</a>
+                    </div>
+                {% endif %}
+            </section>
+        </main>
+    </div>
 
-            <div class="feedback">
-                {{ eval.feedback }}
-            </div>
-
-            <div style="margin-top:15px;">
-                <a href="/download-history/{{ eval.id }}" class="download-btn">
-                    ⬇️ Download PDF
-                </a>
-            </div>
-
-        </div>
-
-        {% endfor %}
-
-    {% else %}
-
-        <div class="history-card empty">
-
-            <h3>No evaluations yet</h3>
-
-            <p>
-                Upload an answer sheet and your evaluation history will appear here.
-            </p>
-
-        </div>
-
-    {% endif %}
-
-</div>
-
+    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
 </body>
 </html>

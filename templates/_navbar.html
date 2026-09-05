@@ -1,0 +1,24 @@
+<header class="app-navbar">
+    <div class="nav-inner">
+        <a href="/dashboard" class="brand" aria-label="AI Evaluator dashboard">
+            <span class="brand-mark" aria-hidden="true">AI</span>
+            <span>AI Evaluator</span>
+        </a>
+
+        <button class="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="appNavLinks" data-nav-toggle>
+            ☰
+        </button>
+
+        <nav class="nav-links" id="appNavLinks" aria-label="Primary navigation">
+            <a href="/dashboard" class="nav-link">Dashboard</a>
+            {% if user and user != "Guest" %}
+                <a href="/history" class="nav-link">History</a>
+                <span class="nav-link" aria-label="Current account">Account</span>
+                <a href="/logout" class="nav-link danger">Logout</a>
+            {% else %}
+                <a href="/login" class="nav-link">Login</a>
+                <a href="/signup" class="nav-link active">Sign Up</a>
+            {% endif %}
+        </nav>
+    </div>
+</header>

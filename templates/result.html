@@ -3,50 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Evaluation Result</title>
-
+    <title>Evaluation Result - AI Evaluator</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
-
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-
 <body>
+    <div class="app-shell">
+        {% set user = session.get('user', 'Guest') %}
+        {% include '_navbar.html' %}
 
-    <div class="page-container">
+        {% set pct = ((score|float / max_marks|float) * 100) if max_marks else 0 %}
+        {% set pct_display = pct|round(0, 'floor')|int %}
+        {% if pct >= 85 %}
+            {% set performance = 'Excellent performance' %}
+            {% set summary = 'Strong command of the expected answer with minimal gaps.' %}
+        {% elif pct >= 70 %}
+            {% set performance = 'Good performance' %}
+            {% set summary = 'Solid answer quality with room to strengthen coverage and clarity.' %}
+        {% elif pct >= 50 %}
+            {% set performance = 'Developing performance' %}
+            {% set summary = 'Some correct understanding is visible, but important points need improvement.' %}
+        {% else %}
+            {% set performance = 'Needs improvement' %}
+            {% set summary = 'The response needs stronger accuracy, completeness, and relevance.' %}
+        {% endif %}
 
-        <div class="dashboard-card">
+        <main class="narrow-container">
+            <section class="dashboard-card" aria-labelledby="resultTitle">
+                <span class="eyebrow">Evaluation Complete ✓</span>
+                <h1 class="page-title mt-3" id="resultTitle">Your evaluation report</h1>
+                <p class="page-subtitle">Review the AI-generated score, feedback, and next steps. You can download the report as a PDF or evaluate another answer sheet.</p>
 
-            <h1 class="page-title">Evaluation Result</h1>
+                <div class="result-grid">
+                    <aside class="result-panel score-card" aria-label="Score summary">
+                        <div class="score-ring" style="--score: {{ pct if pct <= 100 else 100 }};" aria-label="{{ pct_display }} percent score">
+                            <div class="result-score">
+                                {{ score }}<span class="max-marks">/ {{ max_marks }}</span>
+                            </div>
+                        </div>
+                        <div class="percentage">{{ pct_display }}%</div>
+                        <span class="status-badge ready mt-2">{{ performance }}</span>
+                        <div class="progress-track mt-4" aria-hidden="true">
+                            <div class="progress-fill" style="width: {{ pct if pct <= 100 else 100 }}%;"></div>
+                        </div>
+                    </aside>
 
-            <div class="text-center">
+                    <section class="result-panel" aria-labelledby="feedbackTitle">
+                        <h2 id="feedbackTitle">AI Feedback</h2>
+                        <div class="feedback-box mt-3">
+                            {{ feedback }}
+                        </div>
 
-                <div class="result-score">
-                    {{ score }}<span class="max-marks">/ {{ max_marks }}</span>
+                        <div class="insight-grid">
+                            <div class="insight-card">
+                                <h2>Strengths</h2>
+                                <p class="mb-0">{{ summary }}</p>
+                            </div>
+                            <div class="insight-card">
+                                <h2>Areas for improvement</h2>
+                                <p class="mb-0">Use the AI feedback to identify missing points, refine explanations, and improve answer structure before the next attempt.</p>
+                            </div>
+                        </div>
+
+                        {% if question_scores %}
+                            <div class="feedback-box mt-3">
+                                <h2>Question-wise breakdown</h2>
+                                {% for item in question_scores %}
+                                    <div class="mock-row">
+                                        <span>{{ item.question }}</span>
+                                        <strong>{{ item.score }}</strong>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <div class="result-actions">
+                            <a href="/download-result" class="btn-primary-custom">Download PDF</a>
+                            <a href="/dashboard" class="btn-secondary-custom">Evaluate another answer</a>
+                        </div>
+                    </section>
                 </div>
-
-                <p class="page-subtitle">
-                    Suggested Marks
-                </p>
-
-            </div>
-
-            <div class="feedback-box">
-                <h3 style="color: #8b5cf6; margin-bottom: 12px;">AI Feedback</h3>
-                {{ feedback }}
-            </div>
-
-            <div class="button-group">
-                <a href="/download-result" class="btn-primary-custom" style="display: inline-block; width: auto; padding: 12px 28px;">
-                    📥 Download as PDF
-                </a>
-                <a href="/dashboard" class="btn-secondary-custom">
-                    Evaluate Another Answer
-                </a>
-            </div>
-
-        </div>
-
+            </section>
+        </main>
     </div>
 
+    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
 </body>
 </html>
