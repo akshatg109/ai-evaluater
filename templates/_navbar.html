@@ -13,7 +13,7 @@
             <a href="/dashboard" class="nav-link">Dashboard</a>
             {% if user and user != "Guest" %}
                 <a href="/history" class="nav-link">History</a>
-                <span class="nav-link" aria-label="Current account">Account</span>
+                <span class="nav-link greeting" aria-label="Logged in as {{ user }}">Welcome, {{ user }}</span>
                 <a href="/logout" class="nav-link danger">Logout</a>
             {% else %}
                 <a href="/login" class="nav-link">Login</a>

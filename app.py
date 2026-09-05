@@ -9,7 +9,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from io import BytesIO
 import json
 import os
@@ -17,7 +17,6 @@ from datetime import datetime
 from supabase import create_client
 from pathlib import Path
 import base64
-import tempfile
 
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
@@ -66,17 +65,6 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-import base64
-import tempfile
-
-def image_to_base64(image_path):
-    with open(image_path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
-
-
-from pdf2image import convert_from_path
-from PIL import Image
-import os
 
 def pdf_to_images(file_path):
 
@@ -176,31 +164,6 @@ def file_to_images(file_path):
 
     else:
         raise ValueError(f"Unsupported file type: {ext}")
-
-
-def extract_documents_with_qwen(
-    question_path,
-    answer_path,
-    answer_key_path=None
-):
-
-    question_images = file_to_images(question_path)
-    answer_images = file_to_images(answer_path)
-
-    answer_key_images = []
-
-    if answer_key_path:
-        answer_key_images = file_to_images(answer_key_path)
-
-    print("Question Pages:", len(question_images))
-    print("Answer Pages:", len(answer_images))
-    print("Answer Key Pages:", len(answer_key_images))
-
-    return {
-        "question_images": question_images,
-        "answer_images": answer_images,
-        "answer_key_images": answer_key_images
-    }
 
 
 def evaluate_complete_submission(
@@ -369,18 +332,18 @@ Return ONLY valid JSON in this format:
         return json.loads(content)
 
     except Exception as e:
-      import traceback
+        import traceback
 
-    print("\n========== QWEN EVALUATION ERROR ==========")
-    print("Exception:", repr(e))
-    print("Cause:", repr(e.__cause__))
-    traceback.print_exc()
-    print("===========================================\n")
+        print("\n========== QWEN EVALUATION ERROR ==========")
+        print("Exception:", repr(e))
+        print("Cause:", repr(e.__cause__))
+        traceback.print_exc()
+        print("===========================================\n")
 
-    return {
-        "score": 0,
-        "feedback": "AI evaluation is temporarily unavailable."
-    }
+        return {
+            "score": 0,
+            "feedback": "AI evaluation is temporarily unavailable."
+        }
 
 
 def generate_report_buffer(data):
@@ -503,9 +466,15 @@ def dashboard():
 
 @app.route("/evaluate", methods=["POST"])
 def evaluate():
-    question_file = request.files["question_file"]
-    answer_file = request.files["answer_file"]
+    question_file = request.files.get("question_file")
+    answer_file = request.files.get("answer_file")
     answer_key_file = request.files.get("answer_key")
+
+    if not question_file or not answer_file:
+        return render_template(
+            "error.html",
+            error="Please upload both a question paper and an answer sheet."
+        ), 400
 
     # Validate file sizes
     question_file.seek(0, 2)  # Seek to end
@@ -543,97 +512,87 @@ def evaluate():
         secure_filename(answer_file.filename)
     )
 
-    question_file.save(question_path)
-    answer_file.save(answer_path)
-
-        # Extract answer key if provided
-    answer_key_text = None
     answer_key_path = None
-
     if answer_key_file:
         answer_key_path = os.path.join(
             app.config["UPLOAD_FOLDER"],
             secure_filename(answer_key_file.filename)
         )
-        answer_key_file.save(answer_key_path)
 
-    # Always evaluate, whether or not an answer key exists
-    result = evaluate_complete_submission(
-        question_path,
-        answer_path,
-        answer_key_path
-    )
-
-    question_text = result["question_text"]
-    student_answer = result["student_answer"]
-    answer_key_text = result["answer_key"]
-    max_marks = result["max_marks"]
-
-    print("QUESTION OCR:", question_text)
-    print("ANSWER OCR:", student_answer)
-    if answer_key_text:
-        print("ANSWER KEY OCR:", answer_key_text)
-
-    score = int(result["score"])
-    feedback = result["feedback"]
-
-    email = session.get("user", "guest")
+    def cleanup_files():
+        for path in (question_path, answer_path, answer_key_path):
+            if not path:
+                continue
+            try:
+                os.remove(path)
+            except (OSError, FileNotFoundError):
+                pass
 
     try:
-        supabase.table("evaluations").insert({
-            "user_email": email,
-            "score": score,
-            "feedback": feedback,
-            "answer_key": answer_key_text if answer_key_text else "",
-            "question_text": question_text,
-            "student_answer": student_answer,
-            "report_path": ""
-        }).execute()
+        question_file.save(question_path)
+        answer_file.save(answer_path)
+        if answer_key_file:
+            answer_key_file.save(answer_key_path)
 
-        print("✅ Saved to Supabase")
+        result = evaluate_complete_submission(
+            question_path,
+            answer_path,
+            answer_key_path
+        )
+
+        question_text = result["question_text"]
+        student_answer = result["student_answer"]
+        answer_key_text = result["answer_key"]
+        max_marks = result["max_marks"]
+
+        print("QUESTION OCR:", question_text)
+        print("ANSWER OCR:", student_answer)
+        if answer_key_text:
+            print("ANSWER KEY OCR:", answer_key_text)
+
+        score = int(result["score"])
+        feedback = result["feedback"]
+
+        email = session.get("user", "guest")
+
+        try:
+            supabase.table("evaluations").insert({
+                "user_email": email,
+                "score": score,
+                "feedback": feedback,
+                "answer_key": answer_key_text if answer_key_text else "",
+                "question_text": question_text,
+                "student_answer": student_answer,
+                "report_path": ""
+            }).execute()
+
+            print("✅ Saved to Supabase")
+
+        except Exception as e:
+            print("❌ Supabase Save Error:", e)
+
+        session['evaluation_data'] = {
+            'score': score,
+            'feedback': feedback,
+            'max_marks': max_marks,
+            'question': question_text,
+            'answer': student_answer,
+            'answer_key': answer_key_text,
+            'question_filename': question_file.filename,
+            'answer_filename': answer_file.filename,
+            'answer_key_filename': answer_key_file.filename if answer_key_file else None
+        }
 
     except Exception as e:
-        print("❌ Supabase Save Error:", e)
+        import traceback
+        traceback.print_exc()
+        cleanup_files()
+        return render_template(
+            "error.html",
+            error="Evaluation failed. Please check your files and try again."
+        ), 500
 
-    email = session.get("user", "guest")
-
-    try:
-        supabase.table("evaluations").insert({
-            "user_email": email,
-            "score": score,
-            "feedback": feedback,
-            "answer_key": answer_key_text if answer_key_text else "",
-            "question_text": question_text,
-            "student_answer": student_answer,
-            "report_path": ""
-        }).execute()
-
-        print("✅ Saved to Supabase")
-
-    except Exception as e:
-        print("❌ Supabase Save Error:", e)
-
-    # Store in session for PDF download
-    session['evaluation_data'] = {
-        'score': score,
-        'feedback': feedback,
-        'max_marks': max_marks,
-        'question': question_text,
-        'answer': student_answer,
-        'answer_key': answer_key_text,
-        'question_filename': question_file.filename,
-        'answer_filename': answer_file.filename,
-        'answer_key_filename': answer_key_file.filename if answer_key_file else None
-    }
-
-    # Clean up uploaded files
-    try:
-        os.remove(question_path)
-        os.remove(answer_path)
-        if answer_key_path:
-            os.remove(answer_key_path)
-    except (OSError, FileNotFoundError):
-         pass  # Files may have already been deleted
+    cleanup_files()
 
     return render_template(
         "result.html",
@@ -685,7 +644,7 @@ def signup():
             return redirect("/login")
 
         except Exception as e:
-            return str(e)
+            return render_template("signup.html", error=str(e))
 
     return render_template("signup.html")
 
@@ -710,7 +669,7 @@ def login():
             return redirect("/dashboard")
 
         except Exception as e:
-            return str(e)
+            return render_template("login.html", error=str(e)), 401
 
     return render_template("login.html")
 
@@ -766,70 +725,9 @@ def download_history(eval_id):
 def download_result():
     if 'evaluation_data' not in session:
         return "No evaluation data found", 404
-    
+
     data = session['evaluation_data']
-    
-    # Create PDF
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        rightMargin=0.75*inch,
-        leftMargin=0.75*inch,
-        topMargin=0.75*inch,
-        bottomMargin=0.75*inch
-    )
-    
-    story = []
-    styles = getSampleStyleSheet()
-    
-    # Custom styles
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#8b5cf6'),
-        spaceAfter=12,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-    
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.HexColor('#3b82f6'),
-        spaceAfter=10,
-        spaceBefore=12,
-        fontName='Helvetica-Bold'
-    )
-    
-    normal_style = ParagraphStyle(
-        'CustomNormal',
-        parent=styles['Normal'],
-        fontSize=11,
-        spaceAfter=10,
-        alignment=TA_JUSTIFY
-    )
-    
-    meta_style = ParagraphStyle(
-        'MetaStyle',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=colors.HexColor('#666666'),
-        spaceAfter=4
-    )
-    
-    # Title
-    story.append(Paragraph("📋 AI Answer Sheet Evaluation Report", title_style))
-    story.append(Spacer(1, 6))
-    
-    # Divider line
-    from reportlab.platypus import HRFlowable
-    story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#8b5cf6')))
-    story.append(Spacer(1, 12))
-    
-    # Use shared PDF builder
+
     buffer = generate_report_buffer(data)
     return send_file(
         buffer,

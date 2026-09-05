@@ -294,6 +294,15 @@ button:disabled,
     color: #fecaca !important;
 }
 
+.nav-link.greeting,
+.nav-link.greeting:hover {
+    background: transparent;
+    color: #94a3b8 !important;
+    font-weight: 550;
+    cursor: default;
+    white-space: nowrap;
+}
+
 .nav-toggle {
     display: none;
     width: 44px;

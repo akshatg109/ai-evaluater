@@ -1,12 +1,10 @@
 (function () {
     const MAX_FILE_SIZE = 20 * 1024 * 1024;
-    const VALID_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp']);
+    const VALID_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png']);
     const VALID_MIME_TYPES = new Set([
         'application/pdf',
         'image/jpeg',
-        'image/png',
-        'image/gif',
-        'image/webp'
+        'image/png'
     ]);
 
     const form = document.querySelector('#evaluateForm');
@@ -73,7 +71,7 @@
             return { valid: false, message: 'Unsupported file format. Upload a PDF or image file.' };
         }
 
-        if (file.type && !VALID_MIME_TYPES.has(file.type) && !file.type.startsWith('image/')) {
+        if (file.type && !VALID_MIME_TYPES.has(file.type)) {
             return { valid: false, message: 'Unsupported file format. Upload a PDF or image file.' };
         }
 
