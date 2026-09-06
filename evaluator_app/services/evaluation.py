@@ -9,9 +9,31 @@ from pdf2image import convert_from_path
 
 
 LOGGER = logging.getLogger(__name__)
+DEFAULT_MAX_DOCUMENT_PAGES = 50
+ANSWER_VISIBILITY_STATUSES = {"visible", "partial", "unreadable", "not_found"}
 
 
-def document_to_images(file_path):
+def _validate_visibility(value, required=False):
+    """Validate the model's page-grounded answer visibility audit."""
+    if value is None:
+        if required:
+            raise ValueError("The answer visibility audit is missing.")
+        return []
+    if not isinstance(value, list):
+        raise ValueError("The answer visibility audit is invalid.")
+    for entry in value:
+        if (
+            not isinstance(entry, dict)
+            or not isinstance(entry.get("question"), str)
+            or not entry["question"].strip()
+        ):
+            raise ValueError("The answer visibility audit contains an invalid question.")
+        if entry.get("status") not in ANSWER_VISIBILITY_STATUSES:
+            raise ValueError("The answer visibility audit contains an invalid status.")
+    return value
+
+
+def document_to_images(file_path, max_pages=DEFAULT_MAX_DOCUMENT_PAGES):
     """Return page images for a PDF, or the source image for image uploads."""
     source_path = Path(file_path)
     extension = source_path.suffix.lower()
@@ -22,10 +44,24 @@ def document_to_images(file_path):
         raise ValueError(f"Unsupported file type: {extension}")
 
     image_paths = []
-    for page_number, image in enumerate(convert_from_path(source_path)):
-        image_path = source_path.with_name(f"{source_path.name}_{page_number}.png")
-        image.save(image_path, "PNG")
-        image_paths.append(image_path)
+    pages = convert_from_path(
+        source_path,
+        first_page=1,
+        last_page=max_pages + 1,
+    )
+    if not pages:
+        raise ValueError("The PDF does not contain any readable pages.")
+    if len(pages) > max_pages:
+        raise ValueError(f"Documents cannot contain more than {max_pages} pages.")
+    try:
+        for page_number, image in enumerate(pages):
+            image_path = source_path.with_name(f"{source_path.name}_{page_number}.png")
+            image.save(image_path, "PNG")
+            image_paths.append(image_path)
+    except Exception:
+        for image_path in image_paths:
+            image_path.unlink(missing_ok=True)
+        raise
     return image_paths
 
 
@@ -38,10 +74,16 @@ def _image_content(image_path):
     }
 
 
-def _append_document(content, label, file_path, generated_images):
+def _append_document(
+    content,
+    label,
+    file_path,
+    generated_images,
+    max_pages=DEFAULT_MAX_DOCUMENT_PAGES,
+):
     """Add one labelled document's images to a vision prompt."""
     source_path = Path(file_path)
-    image_paths = document_to_images(source_path)
+    image_paths = document_to_images(source_path, max_pages=max_pages)
     generated_images.extend(path for path in image_paths if path != source_path)
 
     content.append({"type": "text", "text": f"BEGIN {label}"})
@@ -50,14 +92,24 @@ def _append_document(content, label, file_path, generated_images):
 
 
 def _parse_json(content):
-    """Parse a JSON response, tolerating a Markdown code fence."""
+    """Parse a model JSON response, tolerating fences and raw line breaks."""
     value = content.strip()
     if value.startswith("```"):
         value = value.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    return json.loads(value)
+    # Vision models occasionally place a literal newline in a transcription
+    # string instead of escaping it as ``\\n``. ``strict=False`` preserves
+    # that text while still validating the response structure.
+    return json.loads(value, strict=False)
 
 
-def read_submission_documents(question_path, answer_path, client, model, answer_key_path=None):
+def read_submission_documents(
+    question_path,
+    answer_path,
+    client,
+    model,
+    answer_key_path=None,
+    max_pages=DEFAULT_MAX_DOCUMENT_PAGES,
+):
     """Read every supplied document in one Qwen vision request."""
     content = [{
         "type": "text",
@@ -88,10 +140,10 @@ Return ONLY valid JSON in this exact shape:
     generated_images = []
 
     try:
-        _append_document(content, "QUESTION PAPER", question_path, generated_images)
-        _append_document(content, "STUDENT ANSWER", answer_path, generated_images)
+        _append_document(content, "QUESTION PAPER", question_path, generated_images, max_pages)
+        _append_document(content, "STUDENT ANSWER", answer_path, generated_images, max_pages)
         if answer_key_path:
-            _append_document(content, "ANSWER KEY", answer_key_path, generated_images)
+            _append_document(content, "ANSWER KEY", answer_key_path, generated_images, max_pages)
 
         response = client.chat.completions.create(
             model=model,
@@ -103,7 +155,120 @@ Return ONLY valid JSON in this exact shape:
             "student_answer": str(result["student_answer"]).strip(),
             "answer_key": str(result["answer_key"]).strip() if result.get("answer_key") else None,
             "max_marks": int(result["max_marks"]),
-            "answer_visibility": result.get("answer_visibility", []),
+            "answer_visibility": _validate_visibility(result.get("answer_visibility")),
+        }
+    finally:
+        for image_path in generated_images:
+            image_path.unlink(missing_ok=True)
+
+
+def read_reference_documents(
+    question_path,
+    client,
+    model,
+    answer_key_path=None,
+    max_pages=DEFAULT_MAX_DOCUMENT_PAGES,
+):
+    """Read the shared question paper and optional key once for a batch."""
+    content = [{
+        "type": "text",
+        "text": """
+You are reading the shared reference documents for an exam. The labelled image groups are a QUESTION PAPER and optionally an ANSWER KEY.
+
+Read every page in every supplied group. Transcribe the question paper completely and faithfully. Do not invent missing text. Transcribe the answer key completely when present.
+
+Determine the TOTAL maximum marks from the QUESTION PAPER.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "question_text": "complete question-paper transcription",
+  "answer_key": "complete answer-key transcription or null when absent",
+  "max_marks": 100
+}
+""",
+    }]
+    generated_images = []
+
+    try:
+        _append_document(content, "QUESTION PAPER", question_path, generated_images, max_pages)
+        if answer_key_path:
+            _append_document(content, "ANSWER KEY", answer_key_path, generated_images, max_pages)
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": content}],
+        )
+        result = _parse_json(response.choices[0].message.content)
+        question_value = result.get("question_text")
+        if not isinstance(question_value, str):
+            raise ValueError("The shared question paper transcription is invalid.")
+        question_text = question_value.strip()
+        max_marks_value = result.get("max_marks")
+        if isinstance(max_marks_value, bool):
+            raise ValueError("The shared maximum marks value is invalid.")
+        max_marks = int(max_marks_value)
+        if not question_text or not 0 < max_marks <= 1000000:
+            raise ValueError("The shared question paper references are invalid.")
+        return {
+            "question_text": question_text,
+            "answer_key": str(result["answer_key"]).strip() if result.get("answer_key") else None,
+            "max_marks": max_marks,
+        }
+    finally:
+        for image_path in generated_images:
+            image_path.unlink(missing_ok=True)
+
+
+def read_answer_document(
+    answer_path,
+    question_text,
+    client,
+    model,
+    max_pages=DEFAULT_MAX_DOCUMENT_PAGES,
+):
+    """Transcribe one answer sheet and audit visibility against shared text."""
+    content = [{
+        "type": "text",
+        "text": f"""
+You are reading one uploaded STUDENT ANSWER document for an exam.
+
+Shared QUESTION PAPER transcription:
+{question_text}
+
+Read every page in the STUDENT ANSWER document. The uploaded pages are the complete submission: do NOT assume additional pages exist. The student answer may be handwritten.
+
+Transcribe readable handwriting faithfully; do not correct spelling, grammar, or calculations. Use [illegible] only where text truly cannot be read, and never invent, complete, or infer student-answer text from the question paper.
+
+Audit the submitted pages against the questions in the shared question paper. For each question, report one of: visible (a complete readable answer is visible), partial (only part of an answer is visible, including a cut-off answer), unreadable (an answer area is present but cannot be read), or not_found (no answer is visible in the uploaded student-answer pages). This audit must be based only on the student-answer images. Use not_found when a question appears in the question paper but no corresponding response appears in the uploaded pages.
+
+Return ONLY valid JSON in this exact shape:
+{{
+  "student_answer": "complete student-answer transcription",
+  "answer_visibility": [
+    {{"question": "Q1", "status": "visible"}},
+    {{"question": "Q2", "status": "not_found"}}
+  ]
+}}
+""",
+    }]
+    generated_images = []
+
+    try:
+        _append_document(content, "STUDENT ANSWER", answer_path, generated_images, max_pages)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": content}],
+        )
+        result = _parse_json(response.choices[0].message.content)
+        student_answer = result.get("student_answer")
+        if not isinstance(student_answer, str):
+            raise ValueError("The student answer transcription is invalid.")
+        return {
+            "student_answer": student_answer.strip(),
+            "answer_visibility": _validate_visibility(
+                result.get("answer_visibility"),
+                required=True,
+            ),
         }
     finally:
         for image_path in generated_images:
@@ -118,6 +283,7 @@ def evaluate_answer(
     model,
     answer_key=None,
     answer_visibility=None,
+    raise_errors=False,
 ):
     """Generate a structured score and feedback response in the second call."""
     visibility_audit = json.dumps(answer_visibility or [], ensure_ascii=False)
@@ -179,9 +345,20 @@ Return ONLY valid JSON:
             messages=[{"role": "user", "content": prompt}],
         )
         result = _parse_json(response.choices[0].message.content)
-        return {"score": int(result["score"]), "feedback": str(result["feedback"])}
+        score_value = result.get("score")
+        if isinstance(score_value, bool):
+            raise ValueError("The model returned an invalid score.")
+        score = int(score_value)
+        if score < 0 or score > int(max_marks):
+            raise ValueError("The model returned a score outside the allowed range.")
+        feedback = result.get("feedback")
+        if feedback is None:
+            raise ValueError("The model returned no evaluation feedback.")
+        return {"score": score, "feedback": str(feedback)}
     except Exception:
         LOGGER.exception("Unable to generate a usable AI evaluation")
+        if raise_errors:
+            raise
         return {
             "score": 0,
             "feedback": "AI evaluation is temporarily unavailable.",
@@ -207,3 +384,35 @@ def evaluate_submission(question_path, answer_path, client, model, answer_key_pa
         documents["answer_visibility"],
     )
     return {**documents, **evaluation}
+
+
+def evaluate_answer_sheet(
+    answer_path,
+    references,
+    client,
+    model,
+    max_pages=DEFAULT_MAX_DOCUMENT_PAGES,
+):
+    """Evaluate one sheet using references already read for its batch."""
+    answer = read_answer_document(
+        answer_path,
+        references["question_text"],
+        client,
+        model,
+        max_pages,
+    )
+    evaluation = evaluate_answer(
+        references["question_text"],
+        answer["student_answer"],
+        references["max_marks"],
+        client,
+        model,
+        references.get("answer_key"),
+        answer["answer_visibility"],
+        raise_errors=True,
+    )
+    return {
+        **references,
+        **answer,
+        **evaluation,
+    }

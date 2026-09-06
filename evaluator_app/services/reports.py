@@ -59,8 +59,16 @@ def generate_evaluation_report(data, include_date=False):
             Paragraph(f"<b>Evaluation Date:</b> {_safe_paragraph(data.get('created_at'))}", metadata_style),
             Spacer(1, 12),
         ])
+    if data.get("answer_filename"):
+        story.extend([
+            Paragraph(f"<b>Answer Sheet:</b> {_safe_paragraph(data.get('answer_filename'))}", metadata_style),
+            Spacer(1, 12),
+        ])
 
-    score_table = Table([["Suggested Marks", str(data.get("score", 0))]], colWidths=[2 * inch, 2 * inch])
+    score = data.get("score", 0)
+    max_marks = data.get("max_marks")
+    score_display = f"{score} / {max_marks}" if max_marks is not None else str(score)
+    score_table = Table([["Suggested Marks", score_display]], colWidths=[2 * inch, 2 * inch])
     score_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (1, 0), colors.HexColor("#8b5cf6")),
         ("TEXTCOLOR", (0, 0), (1, 0), colors.whitesmoke),
