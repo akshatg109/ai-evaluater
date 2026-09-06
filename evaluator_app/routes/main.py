@@ -1,11 +1,15 @@
 """Landing page, dashboard, and history routes."""
 
 from datetime import datetime
+import logging
 
 from flask import Blueprint, current_app, redirect, render_template, session
 
+from ..services.batches import BatchStore
+
 
 main_bp = Blueprint("main", __name__)
+LOGGER = logging.getLogger(__name__)
 
 
 def format_datetime(value):
@@ -22,13 +26,32 @@ def _user_evaluations(email):
     supabase = current_app.extensions["supabase"]
     if supabase is None:
         return []
-    return (
-        supabase.table("evaluations")
-        .select("*")
-        .eq("user_email", email)
-        .order("created_at", desc=True)
-        .execute()
-    ).data
+    try:
+        return (
+            supabase.table("evaluations")
+            .select("*")
+            .eq("user_email", email)
+            .order("created_at", desc=True)
+            .execute()
+        ).data
+    except Exception:
+        LOGGER.exception("Unable to retrieve standalone evaluation history")
+        return []
+
+
+def _user_batches(email):
+    supabase = current_app.extensions["supabase"]
+    if supabase is None:
+        return []
+    try:
+        return BatchStore(
+            supabase,
+            current_app.config["SUPABASE_STORAGE_BUCKET"],
+        ).list_user_batches(email)
+    except Exception:
+        # This keeps legacy history usable while a new database migration is pending.
+        LOGGER.exception("Unable to retrieve batch evaluation history")
+        return []
 
 
 @main_bp.get("/")
@@ -43,6 +66,8 @@ def dashboard():
         "dashboard.html",
         user=user,
         evaluations=_user_evaluations(user) if user != "Guest" else [],
+        max_batch_size=current_app.config["MAX_BATCH_SIZE"],
+        max_file_size_mb=current_app.config["MAX_FILE_SIZE"] // (1024 * 1024),
     )
 
 
@@ -52,6 +77,14 @@ def history():
         return redirect("/login")
 
     evaluations = _user_evaluations(session["user"])
+    batches = _user_batches(session["user"])
     for evaluation in evaluations:
         evaluation["formatted_date"] = format_datetime(evaluation.get("created_at"))
-    return render_template("history.html", evaluations=evaluations, user=session["user"])
+    for batch in batches:
+        batch["formatted_date"] = format_datetime(batch.get("created_at"))
+    return render_template(
+        "history.html",
+        evaluations=evaluations,
+        batches=batches,
+        user=session["user"],
+    )

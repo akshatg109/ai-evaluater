@@ -970,6 +970,372 @@ button:disabled,
     font-size: 2rem;
 }
 
+/* Batch workspace */
+.batch-launch-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 22px;
+    margin-top: 28px;
+    padding: 22px;
+    border: 1px solid rgba(34, 211, 238, 0.2);
+    border-radius: 22px;
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.09), rgba(139, 92, 246, 0.1));
+}
+
+.batch-launch-card h2 {
+    margin: 12px 0 0;
+    color: white;
+    font-size: 1.18rem;
+    font-weight: 850;
+}
+
+.batch-launch-card p {
+    max-width: 720px;
+    margin: 8px 0 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.batch-overview {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 30px;
+}
+
+.batch-overview-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.045);
+}
+
+.batch-overview-item strong {
+    color: white;
+    font-size: 1.45rem;
+    font-weight: 900;
+}
+
+.batch-overview-item span {
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+.required-badge.ready {
+    color: #bbf7d0;
+    border-color: rgba(34, 197, 94, 0.28);
+    background: rgba(34, 197, 94, 0.13);
+}
+
+.batch-upload-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 18px;
+}
+
+.batch-upload-grid .upload-card {
+    height: 100%;
+}
+
+.answer-sheets-panel {
+    margin-top: 18px;
+    padding: 22px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: rgba(15, 23, 42, 0.64);
+}
+
+.answer-sheets-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.answer-drop-zone {
+    display: grid;
+    min-height: 180px;
+    place-items: center;
+    border: 2px dashed rgba(34, 211, 238, 0.3);
+    border-radius: 22px;
+    padding: 24px;
+    text-align: center;
+    background: rgba(34, 211, 238, 0.045);
+    cursor: pointer;
+    transition: 0.22s ease;
+}
+
+.answer-drop-zone:hover,
+.answer-drop-zone.drag-over {
+    border-color: rgba(34, 211, 238, 0.72);
+    background: rgba(34, 211, 238, 0.09);
+    transform: translateY(-2px);
+}
+
+.answer-drop-zone .upload-icon {
+    width: 46px;
+    height: 46px;
+    margin-bottom: 10px;
+    color: var(--cyan);
+}
+
+.answer-file-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.answer-file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.045);
+}
+
+.answer-file-details {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.answer-file-details strong {
+    overflow: hidden;
+    color: white;
+    font-size: 0.92rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.answer-file-details span {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.batch-submit-panel {
+    margin-top: 18px;
+}
+
+.batch-results-container {
+    padding-top: 34px;
+}
+
+.results-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 22px;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 18px;
+    color: #c4b5fd;
+    font-size: 0.9rem;
+    font-weight: 750;
+    text-decoration: none;
+}
+
+.back-link:hover {
+    color: white;
+}
+
+.batch-state-panel {
+    display: grid;
+    gap: 18px;
+    margin-top: 30px;
+    padding: 22px;
+    border: 1px solid rgba(139, 92, 246, 0.24);
+    border-radius: 22px;
+    background: rgba(139, 92, 246, 0.08);
+}
+
+.batch-state-copy {
+    display: grid;
+    gap: 5px;
+}
+
+.status-kicker {
+    color: var(--muted-2);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.batch-state-copy strong {
+    color: white;
+    font-size: 1.4rem;
+    text-transform: capitalize;
+}
+
+.batch-state-copy span:last-child {
+    color: var(--muted);
+}
+
+.batch-progress-track {
+    height: 11px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.batch-progress-value {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--primary), var(--primary-2), var(--cyan));
+    transition: width 0.35s ease;
+}
+
+.batch-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 18px;
+}
+
+.batch-stat-card {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.045);
+}
+
+.batch-stat-card span {
+    color: var(--muted);
+    font-size: 0.84rem;
+}
+
+.batch-stat-card strong {
+    color: white;
+    font-size: 1.6rem;
+    font-weight: 900;
+}
+
+.results-table-wrap {
+    margin-top: 24px;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+}
+
+.results-table {
+    width: 100%;
+    min-width: 720px;
+    border-collapse: collapse;
+}
+
+.results-table th,
+.results-table td {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+}
+
+.results-table th {
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.045);
+    font-size: 0.78rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.results-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.result-file-name,
+.result-score-cell {
+    color: white;
+    font-weight: 750;
+}
+
+.result-feedback-cell {
+    max-width: 380px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.result-status {
+    display: inline-flex;
+    border-radius: 999px;
+    padding: 6px 10px;
+    color: #bfdbfe;
+    background: rgba(59, 130, 246, 0.13);
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: capitalize;
+}
+
+.result-status-completed {
+    color: #bbf7d0;
+    background: rgba(34, 197, 94, 0.13);
+}
+
+.result-status-failed {
+    color: #fecaca;
+    background: rgba(239, 68, 68, 0.13);
+}
+
+.result-status-processing {
+    color: #fde68a;
+    background: rgba(245, 158, 11, 0.13);
+}
+
+.download-btn {
+    display: inline-flex;
+    min-height: 36px;
+    align-items: center;
+    border: 1px solid rgba(34, 211, 238, 0.3);
+    border-radius: 12px;
+    padding: 8px 11px;
+    color: #a5f3fc;
+    background: rgba(34, 211, 238, 0.08);
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.download-btn:hover {
+    color: white;
+    background: rgba(34, 211, 238, 0.16);
+}
+
+.results-empty {
+    padding: 32px !important;
+    color: var(--muted);
+    text-align: center !important;
+}
+
+.batch-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 22px;
+}
+
+.batch-note {
+    margin: 14px 0 0;
+    color: var(--muted);
+    line-height: 1.55;
+}
+
 /* Landing */
 .landing-main {
     width: min(var(--container), calc(100% - 40px));
@@ -1482,5 +1848,40 @@ button:disabled,
 
     .preview-main {
         align-items: flex-start;
+    }
+}
+
+@media (max-width: 1024px) {
+    .batch-upload-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .batch-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .batch-launch-card,
+    .results-header,
+    .answer-sheets-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .batch-overview,
+    .batch-stat-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .batch-launch-card .btn-primary-custom,
+    .results-header-actions,
+    .batch-actions > * {
+        width: 100%;
+    }
+
+    .answer-file-item {
+        align-items: stretch;
+        flex-direction: column;
     }
 }

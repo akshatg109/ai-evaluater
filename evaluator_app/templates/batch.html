@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch Evaluation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        {% set user = session.get('user', 'Guest') %}
+        {% include '_navbar.html' %}
+        <main class="page-container batch-results-container">
+        <div class="dashboard-card batch-results-card">
+            <div class="results-header">
+                <div>
+                    <a href="{{ url_for('main.dashboard') }}" class="back-link">Back to dashboard</a>
+                    <p class="eyebrow">Batch evaluation</p>
+                    <h1 class="page-title">Your answer sheets</h1>
+                    <p class="page-subtitle" id="batchDescription">Loading batch progress...</p>
+                </div>
+                <div class="results-header-actions">
+                    {% if session.get('user') %}
+                        <a href="{{ url_for('main.history') }}" class="btn btn-primary">History</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="batch-state-panel" id="batchStatePanel" aria-live="polite">
+                <div class="batch-state-copy">
+                    <span class="status-kicker">Current status</span>
+                    <strong id="batchStatus">Loading</strong>
+                    <span id="batchStatusMessage">The worker will begin shortly.</span>
+                </div>
+                <div class="batch-progress-track" aria-hidden="true">
+                    <div class="batch-progress-value" id="batchProgressValue"></div>
+                </div>
+            </div>
+
+            <div class="batch-stat-grid">
+                <div class="batch-stat-card">
+                    <span>Total sheets</span>
+                    <strong id="totalCount">-</strong>
+                </div>
+                <div class="batch-stat-card">
+                    <span>Completed</span>
+                    <strong id="completedCount">-</strong>
+                </div>
+                <div class="batch-stat-card">
+                    <span>Failed</span>
+                    <strong id="failedCount">-</strong>
+                </div>
+                <div class="batch-stat-card">
+                    <span>Remaining</span>
+                    <strong id="remainingCount">-</strong>
+                </div>
+            </div>
+
+            <div class="results-table-wrap">
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Answer sheet</th>
+                            <th>Status</th>
+                            <th>Score</th>
+                            <th>Feedback</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsRows">
+                        <tr><td colspan="5" class="results-empty">Loading answer sheets...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="batch-actions">
+                <button type="button" class="btn-secondary-custom" id="retryButton" hidden>
+                    Retry failed sheets
+                </button>
+                <a href="{{ url_for('main.dashboard') }}" class="btn-primary-custom results-new-batch">
+                    Evaluate another batch
+                </a>
+            </div>
+            <p class="batch-note" id="batchNote"></p>
+        </div>
+        </main>
+    </div>
+
+    <script>
+        const statusUrl = {{ url_for('batches.batch_status', batch_id=batch_id)|tojson }};
+        const retryUrl = {{ url_for('batches.retry_batch', batch_id=batch_id)|tojson }};
+        const guestToken = window.sessionStorage
+            ? sessionStorage.getItem('batch-token-{{ batch_id }}')
+            : null;
+        const pollInterval = {{ poll_interval|tojson }} * 1000;
+        const terminalStates = new Set(['completed', 'partial', 'failed']);
+        const batchStatus = document.getElementById('batchStatus');
+        const batchDescription = document.getElementById('batchDescription');
+        const batchStatusMessage = document.getElementById('batchStatusMessage');
+        const progressValue = document.getElementById('batchProgressValue');
+        const resultsRows = document.getElementById('resultsRows');
+        const retryButton = document.getElementById('retryButton');
+        const batchNote = document.getElementById('batchNote');
+
+        function text(element, value) {
+            element.textContent = value == null ? '' : value;
+        }
+
+        function readableStatus(status) {
+            return (status || 'pending').replaceAll('_', ' ');
+        }
+
+        function statusMessage(batch) {
+            if (batch.status === 'completed') return 'Every answer sheet has been evaluated.';
+            if (batch.status === 'partial') return 'Some sheets completed. Review failures and retry them if needed.';
+            if (batch.status === 'failed') return 'No answer sheet completed successfully. You can retry the batch.';
+            if (batch.status === 'processing') return 'The worker is evaluating sheets one at a time.';
+            if (batch.status === 'queued') return 'Your batch is waiting for the background worker.';
+            return 'Finish uploading the batch to begin evaluation.';
+        }
+
+        function renderRows(evaluations) {
+            resultsRows.replaceChildren();
+            if (!evaluations.length) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 5;
+                cell.className = 'results-empty';
+                cell.textContent = 'No answer sheets found.';
+                row.appendChild(cell);
+                resultsRows.appendChild(row);
+                return;
+            }
+
+            evaluations.forEach(evaluation => {
+                const row = document.createElement('tr');
+                const nameCell = document.createElement('td');
+                nameCell.className = 'result-file-name';
+                nameCell.textContent = evaluation.filename;
+
+                const statusCell = document.createElement('td');
+                const badge = document.createElement('span');
+                badge.className = `result-status result-status-${evaluation.status}`;
+                badge.textContent = readableStatus(evaluation.status);
+                statusCell.appendChild(badge);
+
+                const scoreCell = document.createElement('td');
+                scoreCell.className = 'result-score-cell';
+                scoreCell.textContent = evaluation.score == null
+                    ? '-'
+                    : `${evaluation.score} / ${evaluation.max_marks == null ? '?' : evaluation.max_marks}`;
+
+                const feedbackCell = document.createElement('td');
+                feedbackCell.className = 'result-feedback-cell';
+                feedbackCell.textContent = evaluation.feedback || evaluation.failure_message || 'Waiting for evaluation.';
+
+                const actionCell = document.createElement('td');
+                if (evaluation.pdf_url) {
+                    const link = document.createElement('a');
+                    link.className = 'download-btn';
+                    link.href = evaluation.pdf_url;
+                    link.textContent = 'Download PDF';
+                    link.addEventListener('click', async event => {
+                        event.preventDefault();
+                        if (link.dataset.downloading) return;
+                        link.dataset.downloading = 'true';
+                        link.textContent = 'Preparing...';
+                        try {
+                            const response = await fetch(evaluation.pdf_url, {
+                                headers: guestToken ? {'X-Batch-Token': guestToken} : {},
+                            });
+                            if (!response.ok) {
+                                const payload = await response.text();
+                                throw new Error(payload || 'Unable to download this report.');
+                            }
+                            const blobUrl = URL.createObjectURL(await response.blob());
+                            const download = document.createElement('a');
+                            const filename = (evaluation.filename || 'answer-sheet')
+                                .replace(/[^a-z0-9._-]+/gi, '-');
+                            download.href = blobUrl;
+                            download.download = `${filename || 'answer-sheet'}-evaluation.pdf`;
+                            download.click();
+                            window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                        } catch (error) {
+                            text(batchNote, error.message || 'Unable to download this report.');
+                        } finally {
+                            delete link.dataset.downloading;
+                            link.textContent = 'Download PDF';
+                        }
+                    });
+                    actionCell.appendChild(link);
+                }
+                row.append(nameCell, statusCell, scoreCell, feedbackCell, actionCell);
+                resultsRows.appendChild(row);
+            });
+        }
+
+        function render(payload) {
+            const batch = payload.batch;
+            const total = batch.total_sheets || 0;
+            const completed = batch.completed_count || 0;
+            const failed = batch.failed_count || 0;
+            const remaining = Math.max(0, total - completed - failed);
+            const percentage = total ? ((completed + failed) / total) * 100 : 0;
+
+            text(batchStatus, readableStatus(batch.status));
+            text(batchStatusMessage, statusMessage(batch));
+            text(batchDescription, `${batch.question_filename || 'Question paper'}${batch.answer_key_filename ? ' with answer key' : ''}`);
+            text(document.getElementById('totalCount'), total);
+            text(document.getElementById('completedCount'), completed);
+            text(document.getElementById('failedCount'), failed);
+            text(document.getElementById('remainingCount'), remaining);
+            progressValue.style.width = `${percentage}%`;
+            renderRows(payload.evaluations || []);
+
+            const canRetry = ['partial', 'failed'].includes(batch.status) && failed > 0;
+            retryButton.hidden = !canRetry;
+            retryButton.disabled = !canRetry;
+            if (batch.status === 'partial') {
+                text(batchNote, 'Completed reports remain available while failed sheets can be retried.');
+            } else if (batch.status === 'failed') {
+                text(batchNote, 'Retrying keeps any successful reports and requeues only failed sheets.');
+            } else {
+                text(batchNote, 'Progress is saved after each sheet. You can safely return to this page.');
+            }
+        }
+
+        async function loadStatus() {
+            try {
+                const headers = {'Accept': 'application/json'};
+                if (guestToken) headers['X-Batch-Token'] = guestToken;
+                const response = await fetch(statusUrl, {headers});
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(payload.error || 'Unable to retrieve batch progress.');
+                render(payload);
+                if (!terminalStates.has(payload.batch.status)) {
+                    window.setTimeout(loadStatus, pollInterval);
+                }
+            } catch (error) {
+                text(batchStatus, 'Connection issue');
+                text(batchStatusMessage, error.message);
+                window.setTimeout(loadStatus, pollInterval * 2);
+            }
+        }
+
+        retryButton.addEventListener('click', async () => {
+            retryButton.disabled = true;
+            text(batchNote, 'Requeuing failed sheets...');
+            try {
+                const headers = guestToken ? {'X-Batch-Token': guestToken} : {};
+                const response = await fetch(retryUrl, {method: 'POST', headers});
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(payload.error || 'Unable to retry failed sheets.');
+                await loadStatus();
+            } catch (error) {
+                text(batchNote, error.message);
+                retryButton.disabled = false;
+            }
+        });
+
+        loadStatus();
+    </script>
+    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+</body>
+</html>

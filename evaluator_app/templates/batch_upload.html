@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Batch - AI Evaluator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        {% include '_navbar.html' %}
+
+        <main class="page-container">
+            <section class="dashboard-card batch-upload-page" aria-labelledby="batchUploadTitle">
+                <div class="dashboard-hero">
+                    <div>
+                        <span class="eyebrow">Batch evaluation workspace</span>
+                        <h1 class="page-title mt-3" id="batchUploadTitle">Grade a full set at once</h1>
+                        <p class="page-subtitle">
+                            Upload one question paper, an optional answer key, and the answer sheets. Files are staged securely before a background worker evaluates them one at a time.
+                        </p>
+                    </div>
+
+                    <div class="button-row">
+                        <a href="{{ url_for('main.dashboard') }}" class="btn-secondary-custom">Single evaluation</a>
+                        {% if user and user != "Guest" %}
+                            <a href="{{ url_for('main.history') }}" class="btn-ghost">History</a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="batch-overview" aria-label="Batch limits">
+                    <div class="batch-overview-item">
+                        <strong>{{ max_batch_size }}</strong>
+                        <span>answer sheets per batch</span>
+                    </div>
+                    <div class="batch-overview-item">
+                        <strong>{{ max_file_size_mb }} MB</strong>
+                        <span>maximum size per file</span>
+                    </div>
+                    <div class="batch-overview-item">
+                        <strong>Live</strong>
+                        <span>progress and PDF reports</span>
+                    </div>
+                </div>
+
+                <form id="batchForm" novalidate>
+                    <div class="batch-upload-grid">
+                        <article class="upload-card" data-upload>
+                            <div class="upload-card-header">
+                                <div class="step-heading">
+                                    <span class="step-number">1</span>
+                                    <div>
+                                        <h2 class="step-title">Question Paper</h2>
+                                        <p class="step-subtitle">Shared reference for every answer sheet.</p>
+                                    </div>
+                                </div>
+                                <span class="required-badge">Required</span>
+                            </div>
+
+                            <input type="file" id="questionInput" class="file-input" accept=".pdf,.jpg,.jpeg,.png" required aria-label="Upload question paper">
+                            <div class="drag-drop-zone" id="questionDropZone" role="button" tabindex="0" aria-labelledby="questionUploadTitle" aria-describedby="questionUploadInfo">
+                                <div class="upload-empty">
+                                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="17 8 12 3 7 8"></polyline>
+                                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                                    </svg>
+                                    <h3 class="upload-title" id="questionUploadTitle">Drop the question paper here</h3>
+                                    <p class="upload-subtitle">or <span class="upload-link">click to browse</span></p>
+                                    <p class="upload-info" id="questionUploadInfo">PDF, JPG, JPEG, or PNG. Max {{ max_file_size_mb }} MB.</p>
+                                </div>
+                                <div class="file-preview" data-preview aria-live="polite"></div>
+                            </div>
+                        </article>
+
+                        <article class="upload-card" data-upload>
+                            <div class="upload-card-header">
+                                <div class="step-heading">
+                                    <span class="step-number">2</span>
+                                    <div>
+                                        <h2 class="step-title">Answer Key</h2>
+                                        <p class="step-subtitle">Optional reference solution for stricter marking.</p>
+                                    </div>
+                                </div>
+                                <span class="optional-badge">Optional</span>
+                            </div>
+
+                            <input type="file" id="answerKeyInput" class="file-input" accept=".pdf,.jpg,.jpeg,.png" aria-label="Upload optional answer key">
+                            <div class="drag-drop-zone" id="answerKeyDropZone" role="button" tabindex="0" aria-labelledby="answerKeyUploadTitle" aria-describedby="answerKeyUploadInfo">
+                                <div class="upload-empty">
+                                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="17 8 12 3 7 8"></polyline>
+                                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                                    </svg>
+                                    <h3 class="upload-title" id="answerKeyUploadTitle">Drop the answer key here</h3>
+                                    <p class="upload-subtitle">or <span class="upload-link">click to browse</span></p>
+                                    <p class="upload-info" id="answerKeyUploadInfo">PDF, JPG, JPEG, or PNG. Max {{ max_file_size_mb }} MB.</p>
+                                </div>
+                                <div class="file-preview" data-preview aria-live="polite"></div>
+                            </div>
+                        </article>
+                    </div>
+
+                    <section class="answer-sheets-panel" aria-labelledby="answerSheetsTitle">
+                        <div class="answer-sheets-header">
+                            <div class="step-heading">
+                                <span class="step-number">3</span>
+                                <div>
+                                    <h2 class="step-title" id="answerSheetsTitle">Student Answer Sheets</h2>
+                                    <p class="step-subtitle">Select between 1 and {{ max_batch_size }} files. Each sheet gets its own result PDF.</p>
+                                </div>
+                            </div>
+                            <span class="required-badge" id="answerCount">0 selected</span>
+                        </div>
+
+                        <input type="file" id="answerInput" class="file-input" accept=".pdf,.jpg,.jpeg,.png" multiple required aria-label="Upload student answer sheets">
+                        <div class="answer-drop-zone" id="answerDropZone" role="button" tabindex="0" aria-labelledby="answerUploadTitle" aria-describedby="answerUploadInfo">
+                            <div>
+                                <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <h3 class="upload-title" id="answerUploadTitle">Drop all answer sheets here</h3>
+                                <p class="upload-subtitle">or <span class="upload-link">click to browse</span></p>
+                                <p class="upload-info" id="answerUploadInfo">Files upload individually, so large batches stay reliable.</p>
+                            </div>
+                        </div>
+                        <div class="answer-file-list" id="answerFileList" aria-live="polite"></div>
+                    </section>
+
+                    <div id="batchAlert" class="alert-custom" role="alert" aria-live="polite"></div>
+
+                    <div class="submit-panel batch-submit-panel">
+                        <p id="batchProgress">Your batch will start after all files finish uploading. You can follow each result on the next page.</p>
+                        <button type="submit" class="btn-primary-custom" id="batchSubmit">Create and start batch</button>
+                    </div>
+                </form>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const maxBatchSize = {{ max_batch_size|tojson }};
+        const maxFileSize = {{ (max_file_size_mb * 1024 * 1024)|tojson }};
+        const allowedExtensions = new Set(['.pdf', '.png', '.jpg', '.jpeg']);
+        const batchForm = document.getElementById('batchForm');
+        const batchAlert = document.getElementById('batchAlert');
+        const batchProgress = document.getElementById('batchProgress');
+        const batchSubmit = document.getElementById('batchSubmit');
+        const answerInput = document.getElementById('answerInput');
+        const answerDropZone = document.getElementById('answerDropZone');
+        const answerFileList = document.getElementById('answerFileList');
+        const answerCount = document.getElementById('answerCount');
+        let questionFile = null;
+        let answerKeyFile = null;
+        let answerFiles = [];
+        let draft = null;
+        let uploadedQuestion = false;
+        let uploadedAnswerKey = false;
+        const uploadedSheets = new Set();
+
+        function formatBytes(bytes) {
+            if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function showAlert(message, type = 'error') {
+            batchAlert.className = `alert-custom visible ${type}`;
+            batchAlert.textContent = message;
+        }
+
+        function clearAlert() {
+            batchAlert.className = 'alert-custom';
+            batchAlert.textContent = '';
+        }
+
+        function validateFile(file, label) {
+            if (!file) return `${label} is required.`;
+            const dot = file.name.lastIndexOf('.');
+            const extension = dot >= 0 ? file.name.slice(dot).toLowerCase() : '';
+            if (!allowedExtensions.has(extension)) {
+                return `${label} must be a PDF, PNG, JPG, or JPEG file.`;
+            }
+            if (file.size <= 0) {
+                return `${file.name} is empty. Please choose a file with content.`;
+            }
+            if (file.size > maxFileSize) {
+                return `${file.name} exceeds the {{ max_file_size_mb }} MB file limit.`;
+            }
+            return null;
+        }
+
+        function renderSinglePreview(zone, file) {
+            zone.classList.toggle('has-file', Boolean(file));
+            const preview = zone.querySelector('[data-preview]');
+            preview.replaceChildren();
+            if (!file) return;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'preview-main';
+            const icon = document.createElement('span');
+            icon.className = 'preview-doc';
+            icon.textContent = file.type.startsWith('image/') ? 'IMG' : 'PDF';
+            const details = document.createElement('div');
+            const name = document.createElement('p');
+            name.className = 'preview-name';
+            name.textContent = file.name;
+            const meta = document.createElement('p');
+            meta.className = 'preview-meta';
+            meta.textContent = formatBytes(file.size);
+            details.append(name, meta);
+            wrapper.append(icon, details);
+
+            const actions = document.createElement('div');
+            actions.className = 'preview-actions';
+            const replace = document.createElement('button');
+            replace.type = 'button';
+            replace.className = 'btn-small';
+            replace.textContent = 'Replace';
+            replace.addEventListener('click', event => {
+                event.stopPropagation();
+                zone.previousElementSibling.click();
+            });
+            actions.appendChild(replace);
+            preview.append(wrapper, actions);
+        }
+
+        function wireSingle(input, zone, label, setter) {
+            function choose(file) {
+                const error = file && validateFile(file, label);
+                if (error) {
+                    input.value = '';
+                    setter(null);
+                    renderSinglePreview(zone, null);
+                    showAlert(error);
+                    return;
+                }
+                setter(file || null);
+                renderSinglePreview(zone, file || null);
+                clearAlert();
+            }
+
+            input.addEventListener('change', () => choose(input.files[0]));
+            zone.addEventListener('click', event => {
+                if (event.target.closest('button')) return;
+                input.click();
+            });
+            zone.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    input.click();
+                }
+            });
+            zone.addEventListener('dragover', event => {
+                event.preventDefault();
+                zone.classList.add('drag-over');
+            });
+            zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+            zone.addEventListener('drop', event => {
+                event.preventDefault();
+                zone.classList.remove('drag-over');
+                choose(event.dataTransfer.files[0]);
+            });
+        }
+
+        function renderAnswerFiles() {
+            answerFileList.replaceChildren();
+            answerCount.textContent = `${answerFiles.length} selected`;
+            answerCount.classList.toggle('ready', answerFiles.length > 0);
+            answerFiles.forEach((file, index) => {
+                const item = document.createElement('div');
+                item.className = 'answer-file-item';
+                const details = document.createElement('div');
+                details.className = 'answer-file-details';
+                const name = document.createElement('strong');
+                name.textContent = file.name;
+                const meta = document.createElement('span');
+                meta.textContent = formatBytes(file.size);
+                details.append(name, meta);
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'btn-small';
+                remove.textContent = 'Remove';
+                remove.disabled = Boolean(draft);
+                remove.addEventListener('click', () => {
+                    if (draft) return;
+                    answerFiles.splice(index, 1);
+                    renderAnswerFiles();
+                });
+                item.append(details, remove);
+                answerFileList.appendChild(item);
+            });
+        }
+
+        function chooseAnswerFiles(fileList) {
+            const files = Array.from(fileList || []);
+            if (!files.length) return;
+            for (const file of files) {
+                const error = validateFile(file, 'Answer sheets');
+                if (error) {
+                    answerInput.value = '';
+                    showAlert(error);
+                    return;
+                }
+            }
+            const additions = files.filter(file => !answerFiles.some(existing => (
+                existing.name === file.name
+                && existing.size === file.size
+                && existing.lastModified === file.lastModified
+            )));
+            if (answerFiles.length + additions.length > maxBatchSize) {
+                answerInput.value = '';
+                showAlert(`Select no more than ${maxBatchSize} answer sheets.`);
+                return;
+            }
+            answerFiles = answerFiles.concat(additions);
+            renderAnswerFiles();
+            clearAlert();
+        }
+
+        function wireAnswerFiles() {
+            answerInput.addEventListener('change', () => chooseAnswerFiles(answerInput.files));
+            answerDropZone.addEventListener('click', () => answerInput.click());
+            answerDropZone.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    answerInput.click();
+                }
+            });
+            answerDropZone.addEventListener('dragover', event => {
+                event.preventDefault();
+                answerDropZone.classList.add('drag-over');
+            });
+            answerDropZone.addEventListener('dragleave', () => answerDropZone.classList.remove('drag-over'));
+            answerDropZone.addEventListener('drop', event => {
+                event.preventDefault();
+                answerDropZone.classList.remove('drag-over');
+                chooseAnswerFiles(event.dataTransfer.files);
+            });
+        }
+
+        function authHeaders() {
+            const token = window.sessionStorage
+                ? sessionStorage.getItem('batch-token-current')
+                : null;
+            return token ? {'X-Batch-Token': token} : {};
+        }
+
+        function saveGuestToken(token, batchId) {
+            if (!token || !window.sessionStorage) return;
+            sessionStorage.setItem(`batch-token-${batchId}`, token);
+            sessionStorage.setItem('batch-token-current', token);
+        }
+
+        function lockDraftInputs() {
+            document.querySelectorAll('#batchForm input[type="file"]').forEach(input => {
+                input.disabled = true;
+            });
+            answerFileList.querySelectorAll('button').forEach(button => {
+                button.disabled = true;
+            });
+        }
+
+        async function responsePayload(response) {
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.error || 'The batch request could not be completed.');
+            return payload;
+        }
+
+        async function uploadFile(url, kind, file, sheetId, progressMessage) {
+            batchProgress.textContent = progressMessage;
+            const formData = new FormData();
+            formData.append('kind', kind);
+            formData.append('file', file, file.name);
+            if (sheetId) formData.append('sheet_id', sheetId);
+            await responsePayload(await fetch(url, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: formData,
+            }));
+        }
+
+        wireSingle(
+            document.getElementById('questionInput'),
+            document.getElementById('questionDropZone'),
+            'Question paper',
+            file => { questionFile = file; },
+        );
+        wireSingle(
+            document.getElementById('answerKeyInput'),
+            document.getElementById('answerKeyDropZone'),
+            'Answer key',
+            file => { answerKeyFile = file; },
+        );
+        wireAnswerFiles();
+
+        batchForm.addEventListener('submit', async event => {
+            event.preventDefault();
+            clearAlert();
+            if (!questionFile) {
+                showAlert('Please select a question paper.');
+                return;
+            }
+            if (!answerFiles.length) {
+                showAlert('Please select at least one student answer sheet.');
+                return;
+            }
+
+            batchSubmit.disabled = true;
+            try {
+                if (!draft) {
+                    batchProgress.textContent = 'Creating a secure batch draft...';
+                    const metadata = {
+                        question: {filename: questionFile.name, size: questionFile.size},
+                        answer_key: answerKeyFile
+                            ? {filename: answerKeyFile.name, size: answerKeyFile.size}
+                            : null,
+                        answer_sheets: answerFiles.map(file => ({
+                            filename: file.name,
+                            size: file.size,
+                        })),
+                    };
+                    draft = await responsePayload(await fetch('/batches', {
+                        method: 'POST',
+                        headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+                        body: JSON.stringify(metadata),
+                    }));
+                    saveGuestToken(draft.access_token, draft.batch_id);
+                    lockDraftInputs();
+                }
+
+                if (!uploadedQuestion) {
+                    await uploadFile(draft.upload_url, 'question', questionFile, null, 'Uploading the question paper...');
+                    uploadedQuestion = true;
+                }
+                if (answerKeyFile && !uploadedAnswerKey) {
+                    await uploadFile(draft.upload_url, 'answer_key', answerKeyFile, null, 'Uploading the answer key...');
+                    uploadedAnswerKey = true;
+                }
+                for (let index = 0; index < answerFiles.length; index += 1) {
+                    const sheet = draft.answer_sheets[index];
+                    if (uploadedSheets.has(sheet.id)) continue;
+                    await uploadFile(
+                        draft.upload_url,
+                        'answer_sheet',
+                        answerFiles[index],
+                        sheet.id,
+                        `Uploading answer sheet ${index + 1} of ${answerFiles.length}...`,
+                    );
+                    uploadedSheets.add(sheet.id);
+                }
+
+                batchProgress.textContent = 'Starting the background evaluator...';
+                const started = await responsePayload(await fetch(draft.start_url, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                }));
+                window.location.assign(started.batch_url || draft.batch_url);
+            } catch (error) {
+                showAlert(error.message || 'Unable to start this batch.');
+                batchProgress.textContent = 'The draft was not started. Check the error and try again.';
+                batchSubmit.disabled = false;
+            }
+        });
+    </script>
+    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+</body>
+</html>

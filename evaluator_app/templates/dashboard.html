@@ -141,6 +141,15 @@
                         <button type="submit" class="btn-primary-custom" id="evaluateBtn">Start Evaluation</button>
                     </div>
                 </form>
+
+                <div class="batch-launch-card" aria-labelledby="batchLaunchTitle">
+                    <div>
+                        <span class="eyebrow">New</span>
+                        <h2 id="batchLaunchTitle">Evaluate multiple answer sheets</h2>
+                        <p>Use one question paper and grade up to {{ max_batch_size }} submissions in the background with live progress.</p>
+                    </div>
+                    <a href="{{ url_for('batches.new_batch') }}" class="btn-primary-custom">Start a batch</a>
+                </div>
             </section>
         </main>
     </div>
