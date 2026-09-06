@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from evaluator_app.application import create_app
+from evaluator_app.config import Config
 from evaluator_app.services.evaluation import document_to_images, evaluate_submission
 from evaluator_app.services.reports import generate_evaluation_report
 
@@ -47,6 +48,7 @@ class ApplicationSmokeTests(unittest.TestCase):
     def test_public_pages_are_available(self):
         self.assertEqual(self.client.get("/").status_code, 200)
         self.assertEqual(self.client.get("/dashboard").status_code, 200)
+        self.assertEqual(self.client.get("/batch/new").status_code, 200)
         self.assertEqual(self.client.get("/login").status_code, 200)
         self.assertEqual(self.client.get("/signup").status_code, 200)
 
@@ -59,6 +61,12 @@ class ApplicationSmokeTests(unittest.TestCase):
         response = self.client.post("/evaluate", data={})
         self.assertEqual(response.status_code, 400)
         self.assertIn(b"Please select a question paper.", response.data)
+
+    def test_request_limit_allows_question_answer_and_answer_key(self):
+        self.assertGreaterEqual(
+            Config.MAX_CONTENT_LENGTH,
+            3 * Config.MAX_FILE_SIZE,
+        )
 
     def test_png_jpg_and_jpeg_are_accepted_as_images(self):
         for extension in (".png", ".jpg", ".jpeg"):
